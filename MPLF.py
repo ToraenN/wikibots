@@ -36,10 +36,13 @@ params_login = {
 }
 
 apicall = session.post(url, data=params_login)
+result = apicall.json()
+loggedin = result['login']['result']
+print("Login " + loggedin + "!")
 del params_login
 
 # Loop script until user is done inputting jobs
-while True:
+while loggedin == 'Success':
     # Prompt user for the old name of the page
     source = input("\nOld name: ")
     # Break loop, and thus logout, if source is blank.
@@ -188,10 +191,6 @@ while True:
             else:
                 raise KeyError
         except KeyError:
-            input("WARNING: Success message not received for '" + title + "'! Please check page before continuing.")
+            print("WARNING: Success message not received for '" + title + "'!")
 # Logout
-params_logout = {
-    'action':"logout"
-}
-
-session.post(url, data= params_logout)
+session.post(url, data= {'action':"logout"})
