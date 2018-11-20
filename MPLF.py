@@ -40,12 +40,14 @@ result = apicall.json()
 loggedin = result['login']['result']
 print("Login " + loggedin + "!")
 del params_login
+regexdict = dict()
+titlelist = set()
 
-# Loop script until user is done inputting jobs
+# Loop until user is done inputting jobs
 while loggedin == 'Success':
     # Prompt user for the old name of the page
     source = input("\nOld name: ")
-    # Break loop, and thus logout, if source is blank.
+    # Break loop, and thus move to processing, if source is blank.
     if source == "":
         break
     # Check move log for destination
@@ -95,6 +97,8 @@ while loggedin == 'Success':
     else:
         destination = input("New name: ")
     # Return to source input if destination is blank or doesn't exist
+    if destination == "":
+            continue
     params_existcheck = {
         'action':"query",
         'titles':destination,
@@ -108,9 +112,8 @@ while loggedin == 'Success':
         print("That destination does not exist!")
         continue
     except KeyError:
-        if destination == "":
-            continue
-    
+        pass
+
     # Build the regexes for finding links
     regex1 = re.compile("\[+" + source.replace(" ", "[_ ]").replace(":", "\:[_ ]{0,1}") + "[_ ]{0,1}(?=[\]\|#])", re.I) # This covers most wikilinks
     regex2 = re.compile("\{+" + source.replace(" ", "[_ ]").replace(":", "\|[_ ]{0,1}") + "[_ ]{0,1}\}+", re.I) # This one is for the {{Build}} template used for the admin noticeboard/user talks
@@ -122,6 +125,7 @@ while loggedin == 'Success':
         replace2 = "{{" + destination.replace(":", "|") + "}}"
     else:
         replace2 = "[[" + destination + "]]"
+    regexdict.update({regex1:replace1, regex2:replace2})
 
     # Get page list
     params_linkshere = {
@@ -136,61 +140,62 @@ while loggedin == 'Success':
     result = apicall.json()
     try:
         pagelist = result['query']['pages']["-1"]['linkshere'] # -1 will be provided as a placeholder for the page id for any missing page
+        for p in pagelist:
+            titlelist.add(p['title'])
     except KeyError:
-        print("'" + source + "' is not a valid old page.")
+        print("'" + source + "' is not linked to.")
         continue
-    titlelist = []
-    for p in pagelist:
-        titlelist.append(p['title'])
+    finally:
+        print(len(titlelist), "pages currently to be updated.")
 
-    # Loop through page list, making replacements
-    for title in titlelist:
-        # Get page wikitext
-        params_listentry = {
-            'action':"parse",
-            'prop':"wikitext",
-            'page':title,
-            'format':"json"
-        }
-        
-        apicall = session.post(url, data= params_listentry)
-        result = apicall.json()
-        # Make replacements
-        pagetext = result['parse']['wikitext']['*']
-        pagetext = re.sub(regex1, replace1, pagetext)
-        pagetext = re.sub(regex2, replace2, pagetext)
-        # Get an edit token
-        params_edittoken = {
-            'action':"query",
-            'meta':"tokens",
-            'titles':title,
-            'format':"json"
-        }
-        
-        apicall = session.post(url, data= params_edittoken)
-        result = apicall.json()
-        
-        edittoken = result['query']['tokens']['csrftoken']
-        # Commit the edit
-        params_editpage = {
-            'action':"edit",
-            'title':title,
-            'bot':"true",
-            'summary':"Updating links to [[" + str(destination) + "]]",
-            'text':pagetext,
-            'token':edittoken,
-            'format':"json"
-        }
-        
-        apicall = session.post(url, data= params_editpage)
-        result = apicall.json()
-        try:
-            status = result['edit']['result']
-            if status == 'Success':
-                print("Links on '" + title + "' updated.")
-            else:
-                raise KeyError
-        except KeyError:
-            print("WARNING: Success message not received for '" + title + "'!")
+# Loop through page list, making replacements
+for title in titlelist:
+    # Get page wikitext
+    params_listentry = {
+        'action':"parse",
+        'prop':"wikitext",
+        'page':title,
+        'format':"json"
+    }
+    
+    apicall = session.post(url, data= params_listentry)
+    result = apicall.json()
+    # Make replacements
+    pagetext = result['parse']['wikitext']['*']
+    for a, b in regexdict.items():
+        pagetext = re.sub(a, b, pagetext)
+    # Get an edit token
+    params_edittoken = {
+        'action':"query",
+        'meta':"tokens",
+        'titles':title,
+        'format':"json"
+    }
+    
+    apicall = session.post(url, data= params_edittoken)
+    result = apicall.json()
+    
+    edittoken = result['query']['tokens']['csrftoken']
+    # Commit the edit
+    params_editpage = {
+        'action':"edit",
+        'title':title,
+        'bot':"true",
+        'summary':"Updating links of moved pages",
+        'text':pagetext,
+        'token':edittoken,
+        'format':"json"
+    }
+    
+    apicall = session.post(url, data= params_editpage)
+    result = apicall.json()
+    try:
+        status = result['edit']['result']
+        if status == 'Success':
+            print("Links on '" + title + "' updated.")
+        else:
+            raise KeyError
+    except KeyError:
+        print("WARNING: Success message not received for '" + title + "'!")
 # Logout
 session.post(url, data= {'action':"logout"})
