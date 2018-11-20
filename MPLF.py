@@ -97,6 +97,8 @@ while loggedin == 'Success':
     else:
         destination = input("New name: ")
     # Return to source input if destination is blank or doesn't exist
+    if destination == "":
+            continue
     params_existcheck = {
         'action':"query",
         'titles':destination,
@@ -110,11 +112,9 @@ while loggedin == 'Success':
         print("That destination does not exist!")
         continue
     except KeyError:
-        if destination == "":
-            continue
+        pass
 
     # Build the regexes for finding links
-
     regex1 = re.compile("\[+" + source.replace(" ", "[_ ]").replace(":", "\:[_ ]{0,1}") + "[_ ]{0,1}(?=[\]\|#])", re.I) # This covers most wikilinks
     regex2 = re.compile("\{+" + source.replace(" ", "[_ ]").replace(":", "\|[_ ]{0,1}") + "[_ ]{0,1}\}+", re.I) # This one is for the {{Build}} template used for the admin noticeboard/user talks
 
