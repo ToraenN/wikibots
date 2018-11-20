@@ -43,6 +43,18 @@ del params_login
 regexdict = dict()
 titlelist = set()
 
+# Get an edit token
+params_edittoken = {
+    'action':"query",
+    'meta':"tokens",
+    'format':"json"
+}
+
+apicall = session.post(url, data= params_edittoken)
+result = apicall.json()
+
+edittoken = result['query']['tokens']['csrftoken']
+
 # Loop until user is done inputting jobs
 while loggedin == 'Success':
     # Prompt user for the old name of the page
@@ -164,18 +176,7 @@ for title in titlelist:
     pagetext = result['parse']['wikitext']['*']
     for a, b in regexdict.items():
         pagetext = re.sub(a, b, pagetext)
-    # Get an edit token
-    params_edittoken = {
-        'action':"query",
-        'meta':"tokens",
-        'titles':title,
-        'format':"json"
-    }
-    
-    apicall = session.post(url, data= params_edittoken)
-    result = apicall.json()
-    
-    edittoken = result['query']['tokens']['csrftoken']
+
     # Commit the edit
     params_editpage = {
         'action':"edit",
