@@ -113,17 +113,16 @@ for page in pagelist:
     
     try:
         print("'" + result['move']['from'] + "' moved to '" + result['move']['to'] + "'.")
+        # Build the regex for finding links
+        regex = re.compile("\[+" + page.replace(" ", "[_ ]").replace(":", "\:[_ ]{0,1}") + "[_ ]{0,1}(?=[\]\|#])", re.I) # This covers most wikilinks
+        
+        # Build the replace string
+        replace = "[[" + newpage
+        
+        # Save to dictionary
+        regexdict.update({regex:replace})
     except KeyError:
-        print(result['error']['info'])
-    
-    # Build the regex for finding links
-    regex = re.compile("\[+" + page.replace(" ", "[_ ]").replace(":", "\:[_ ]{0,1}") + "[_ ]{0,1}(?=[\]\|#])", re.I) # This covers most wikilinks
-    
-    # Build the replace string
-    replace = "[[" + newpage
-    
-    # Save to dictionary
-    regexdict.update({regex:replace})
+        print("'" + page + "' to " newpage + "':" + result['error']['info'])
 
 # Get list of pages with links to fix
 fixlist = set()
