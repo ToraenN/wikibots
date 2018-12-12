@@ -81,6 +81,25 @@ while loggedin == 'Success':
     # Check if each destination exists
     for event in movedlist:
         movetarget = event['params']['target_title']
+        # Chain across multiple moves
+        params_movecheck = {
+            'action':"query",
+            'list':"logevents",
+            'leprop':"type|title|details",
+            'letype':"move",
+            'lelimit':"max",
+            'letitle':movetarget,
+            'format':"json"
+        }
+        
+        apicall = session.get(url=url, params=params_movecheck)
+        result = apicall.json()
+        
+        appendlist = result['query']['logevents']
+        for item in appendlist:
+            if not item in movedlist:
+                movedlist.append(item)
+        # Check the current move event
         params_existcheck = {
             'action':"query",
             'titles':movetarget,
