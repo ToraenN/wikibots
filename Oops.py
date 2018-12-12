@@ -77,6 +77,21 @@ for event in deletedlist:
 
 print("For each entry, enter one of the following:\n'y': restore the page.\n'd': end the script.\nLeave blank to ignore the page.")
 for title in restorelist:
+    # Skip any entry that is already restored/recreated
+    params_existcheck = {
+        'action':"query",
+        'titles':title,
+        'format':"json"
+    }
+    
+    apicall = session.get(url=url, params=params_existcheck)
+    result = apicall.json()
+    
+    try:
+        result['query']['pages']['-1']
+    except KeyError:
+        continue
+    
     params_restore = {
         'action':"undelete",
         'title':title,
@@ -86,16 +101,18 @@ for title in restorelist:
     }
     
     response = input("Restore '" + title + "'? ")
-    if response == 'd':
-        break
+    # Restore the page
     if response == 'y':
         apicall = session.post(url=url, data=params_restore)
         result = apicall.json()
         try:
-            result['delete']
+            result['undelete']
             print("'" + title + "' restored.")
         except KeyError:
             print("Could not restore '" + title + "'. Error code: " + result['error']['code'])
+    # Break the loop -> quit the script
+    elif response == 'd':
+        break
 
 # Logout
 session.post(url, data= {'action':"logout"})

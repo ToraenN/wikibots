@@ -146,8 +146,8 @@ while loggedin == 'Success':
         pass
 
     # Build the regexes for finding links
-    regex1 = re.compile("\[+" + source.replace(" ", "[_ ]").replace(":", "\:[_ ]{0,1}") + "[_ ]{0,1}(?=[\]\|#])", re.I) # This covers most wikilinks
-    regex2 = re.compile("\{+" + source.replace(" ", "[_ ]").replace(":", "\|[_ ]{0,1}") + "[_ ]{0,1}\}+", re.I) # This one is for the {{Build}} template used for the admin noticeboard/user talks
+    regex1 = re.compile("\[+" + source.replace("'", "(%27|')").replace(" ", "[_ ]").replace(":", "\:[_ ]{0,1}") + "[_ ]{0,1}(?=[\]\|#])", re.I) # This covers most wikilinks
+    regex2 = re.compile("\{+" + source.replace("'", "(%27|')").replace(" ", "[_ ]").replace(":", "\|[_ ]{0,1}") + "[_ ]{0,1}\}+", re.I) # This one is for the {{Build}} template used for the admin noticeboard/user talks
 
     # Build the replace strings
     replace1 = "[[" + destination
