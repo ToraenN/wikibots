@@ -1,5 +1,5 @@
 """
-    "Moved Page Link Fixer": Updates all redlinks to a user-provided old page to point to a new page.
+    "Moved Page Link Fixer": Updates all redlinks to user-provided old pages to point to their new pages.
 """
 
 import re
@@ -62,6 +62,23 @@ while loggedin == 'Success':
     # Break loop, and thus move to processing, if source is blank.
     if source == "":
         break
+    # Get page list, check that something actually links to the source page
+    params_linkshere = {
+        'action':"query",
+        'prop':"linkshere",
+        'titles':source,
+        'lhlimit':"max",
+        'format':"json"
+    }
+
+    apicall = session.post(url, data=params_linkshere)
+    result = apicall.json()
+    try:
+        pagelist = result['query']['pages']["-1"]['linkshere'] # -1 will be provided as a placeholder for the page id for any missing page
+
+    except KeyError:
+        print("'" + source + "' is not linked to.")
+        continue
     # Check move log for destination
     params_movecheck = {
         'action':"query",
@@ -114,6 +131,7 @@ while loggedin == 'Success':
         except KeyError:
             destinations.add(movetarget)
     destinations = list(destinations)
+    destination = ""
     # Only display the existing destinations
     if len(destinations) > 0:
         destquery = "Found " + str(len(destinations)) + " possible destinations:"
@@ -122,28 +140,13 @@ while loggedin == 'Success':
         destquery += "\nChoose the number of the destination: "
         try:
             destination = destinations[int(input(destquery))]
-    # If all else fails, let the user input the destination
         except:
-            destination = input("Invalid entry. Please type the new name: ")
+            print("Invalid entry. Skipping '" + source + "'.")
     else:
-        destination = input("New name: ")
-    # Return to source input if destination is blank or doesn't exist
+        print("No destinations found for '" + source + "'.")
+    # Return to source input if destination is blank
     if destination == "":
             continue
-    params_existcheck = {
-        'action':"query",
-        'titles':destination,
-        'format':"json"
-    }
-    
-    apicall = session.get(url=url, params=params_existcheck)
-    result = apicall.json()
-    try:
-        result['query']['pages']['-1']
-        print("That destination does not exist!")
-        continue
-    except KeyError:
-        pass
 
     # Build the regexes for finding links
     regex1 = re.compile("\[+" + source.replace("'", "(%27|')").replace(" ", "[_ ]").replace(":", "\:[_ ]{0,1}") + "[_ ]{0,1}(?=[\]\|#])", re.I) # This covers most wikilinks
@@ -158,26 +161,10 @@ while loggedin == 'Success':
         replace2 = "[[" + destination + "]]"
     regexdict.update({regex1:replace1, regex2:replace2})
 
-    # Get page list
-    params_linkshere = {
-        'action':"query",
-        'prop':"linkshere",
-        'titles':source,
-        'lhlimit':"max",
-        'format':"json"
-    }
-
-    apicall = session.post(url, data=params_linkshere)
-    result = apicall.json()
-    try:
-        pagelist = result['query']['pages']["-1"]['linkshere'] # -1 will be provided as a placeholder for the page id for any missing page
-        for p in pagelist:
-            titlelist.add(p['title'])
-    except KeyError:
-        print("'" + source + "' is not linked to.")
-        continue
-    finally:
-        print(len(titlelist), "pages currently to be updated.")
+    # Finally, add the pages that link to the source to the main list
+    for p in pagelist:
+        titlelist.add(p['title'])
+    print(len(titlelist), "pages currently to be updated.")
 
 # Loop through page list, making replacements
 for title in titlelist:
