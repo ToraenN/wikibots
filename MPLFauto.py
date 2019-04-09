@@ -5,6 +5,19 @@
 import re
 import requests
 
+def inputint(prompt):
+    answer = input(prompt)
+    try:
+        answer = int(answer)
+    except:
+        pass
+    while isinstance(answer, int) == False:
+        try:
+            answer = int(input('Invalid entry, please enter an integer: '))
+        except:
+            pass
+    return answer
+
 # Either hardcode the credentials here, or use the input boxes. 
 # Using the main account for login is not supported. Obtain credentials via Special:BotPasswords
 # The only permissions you need to give to the bot password are 'high volume editing' and 'edit existing pages'.
@@ -42,16 +55,7 @@ print("Login " + loggedin + "!")
 del params_login
 regexdict = dict()
 titlelist = set()
-loglimit = input('Number of log entries to check: ')
-try:
-    loglimit = int(loglimit)
-except:
-    pass
-while isinstance(loglimit, int) == False:
-    try:
-        loglimit = int(input('Invalid entry, please enter an integer: '))
-    except:
-        pass
+loglimit = inputint('Number of log entries to check: ')
 
 input('For each entry found, respond with "y" to add it to the list of links to be fixed.')
 
@@ -68,24 +72,21 @@ result = apicall.json()
 edittoken = result['query']['tokens']['csrftoken']
 
 # Access the move log
-lecontinue = ""
 movelist = []
-for i in range(loglimit):
-    params_movelog = {
-        'action':"query",
-        'list':"logevents",
-        'leprop':"type|title|details",
-        'letype':"move",
-        'lelimit':"1",
-        'format':"json"
-    }
-    
-    if lecontinue != "":
-        params_movelog.update({'lecontinue':lecontinue})
-    apicall = session.get(url=url, params= params_movelog)
-    result = apicall.json()
-    moveentry = result['query']['logevents'][0]['title']
-    lecontinue = result['continue']['lecontinue']
+params_movelog = {
+    'action':"query",
+    'list':"logevents",
+    'leprop':"type|title|details",
+    'letype':"move",
+    'lelimit':loglimit,
+    'format':"json"
+}
+
+apicall = session.get(url=url, params= params_movelog)
+result = apicall.json()
+entrylist = result['query']['logevents']
+for rawentry in entrylist:
+    moveentry = rawentry['title']
     # Check if the page exists (so we can ignore redirects/recreated pages)
     params_exist = {
         'action':"query",
