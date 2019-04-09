@@ -42,7 +42,18 @@ print("Login " + loggedin + "!")
 del params_login
 regexdict = dict()
 titlelist = set()
-input('For each entry found, respond with "y" to add it to the list of links to be fixed, "d" to finish adding links (both can be added to the same response).')
+loglimit = input('Number of log entries to check: ')
+try:
+    loglimit = int(loglimit)
+except:
+    pass
+while isinstance(loglimit, int) == False:
+    try:
+        loglimit = int(input('Invalid entry, please enter an integer: '))
+    except:
+        pass
+
+input('For each entry found, respond with "y" to add it to the list of links to be fixed.')
 
 # Get an edit token
 params_edittoken = {
@@ -59,7 +70,7 @@ edittoken = result['query']['tokens']['csrftoken']
 # Access the move log
 lecontinue = ""
 movelist = []
-while True:
+for i in range(loglimit):
     params_movelog = {
         'action':"query",
         'list':"logevents",
@@ -111,8 +122,6 @@ while True:
         for p in pagelist:
             titlelist.add(p['title'])
         movelist.append(moveentry)
-    if "d" in answer:
-        break
 
 for source in movelist:
     # Check move log for destination
