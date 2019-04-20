@@ -55,7 +55,7 @@ print("Login " + loggedin + "!")
 del params_login
 regexdict = dict()
 titlelist = set()
-loglimit = inputint('Number of log entries to check: ')
+starttime = str(inputint('Enter the time (UTC) to start searching the move log from (YYYYMMDDHHMMSS): ')).ljust(14, "0")
 
 input('For each entry found, respond with "y" to add it to the list of links to be fixed.')
 
@@ -78,7 +78,9 @@ params_movelog = {
     'list':"logevents",
     'leprop':"type|title|details",
     'letype':"move",
-    'lelimit':loglimit,
+    'lelimit':1000,
+    'ledir':"newer",
+    'lestart':starttime,
     'format':"json"
 }
 
