@@ -60,8 +60,6 @@ result = apicall.json()
 loggedin = result['login']['result']
 print("Login " + loggedin + "!")
 del params_login
-regexdict = dict()
-titlelist = set()
 
 # Get an edit token
 params_edittoken = {
@@ -78,6 +76,8 @@ edittoken = result['query']['tokens']['csrftoken']
 boundtime = starttimestamp()
 while True:
 	#Check the move log
+	regexdict = dict()
+	titlelist = set()
 	movelist = []
 	params_movelog = {
 		'action':"query",
@@ -92,7 +92,6 @@ while True:
 
 	apicall = session.get(url=url, params= params_movelog)
 	result = apicall.json()
-	print(result)
 	boundtime = starttimestamp()
 	entrylist = result['query']['logevents']
 	if len(entrylist) == 0:
