@@ -4,11 +4,21 @@
 
 import re
 import requests
+from getpass import getpass
 
-# Either hardcode the credentials here, or use the input boxes. 
+def apiget(url, parameters, session):
+    apicall = session.get(url=url, params=parameters)
+    result = apicall.json()
+    return result
+
+def apipost(url, parameters, session):
+    apicall = session.post(url=url, data=parameters)
+    result = apicall.json()
+    return result
+
 # Using the main account for login is not supported. Obtain credentials via Special:BotPasswords
 username = input("Bot username: ")
-password = input("Bot password: ")
+password = getpass("Bot password: ")
 url = "https://gwpvx.gamepedia.com/api.php"
 session = requests.Session()
 
@@ -20,10 +30,7 @@ params_tokens = {
     'format':"json"
 }
 
-apicall = session.get(url=url, params=params_tokens)
-result = apicall.json()
-
-logintoken = result['query']['tokens']['logintoken']
+logintoken = apiget(url, params_tokens, session)['query']['tokens']['logintoken']
 
 # Then we can login
 params_login = {
@@ -34,16 +41,11 @@ params_login = {
     'format':"json"
 }
 
-apicall = session.post(url, data=params_login)
-result = apicall.json()
-loggedin = result['login']['result']
-print("Login " + loggedin + "!")
-del params_login
+loggedin = apipost(url, params_login, session)['login']['result']
+input("Login " + loggedin + "!")
+del params_login, username, password
 if loggedin != 'Success':
     raise SystemExit()
-
-regexdict = dict()
-titlelist = set()
 
 # Get an edit token
 params_edittoken = {
@@ -52,11 +54,12 @@ params_edittoken = {
     'format':"json"
 }
 
-apicall = session.post(url, data= params_edittoken)
-result = apicall.json()
+edittoken = apipost(url, params_edittoken, session)['query']['tokens']['csrftoken']
 
-edittoken = result['query']['tokens']['csrftoken']
-    
+# Set up variables
+regexdict = dict()
+titlelist = set()
+
 # Prompt user for the old & new usernames
 source = input("\nOld username: ")
 destination = input("\nNew username: ")
@@ -81,12 +84,9 @@ params_oldtalkpages = {
     'aplimit':"max",
     'format':"json"
 }
-apicall = session.get(url=url, params=params_olduserpages)
-result = apicall.json()
-oldpages = result['query']['allpages']
-apicall = session.get(url=url, params=params_oldtalkpages)
-result = apicall.json()
-oldtalks = result['query']['allpages']
+
+oldpages = apiget(url, params_olduserpages, session)['query']['allpages']
+oldtalks = apiget(url, params_oldtalkpages, session)['query']['allpages']
 pagelist = set()
 for page in oldpages:
     pagelist.add(page['title'])
@@ -108,11 +108,10 @@ for page in pagelist:
         'token':edittoken
     }
     
-    apicall = session.post(url=url, data=params_move)
-    result = apicall.json()
+    moveresult = apipost(url, params_move, session)
     
     try:
-        print("'" + result['move']['from'] + "' moved to '" + result['move']['to'] + "'.")
+        print("'" + moveresult['move']['from'] + "' moved to '" + moveresult['move']['to'] + "'.")
         # Build the regex for finding links
         regex = re.compile("\[+" + page.replace(" ", "[_ ]").replace(":", "\:[_ ]{0,1}") + "[_ ]{0,1}(?=[\]\|#])", re.I) # This covers most wikilinks
         
@@ -122,7 +121,7 @@ for page in pagelist:
         # Save to dictionary
         regexdict.update({regex:replace})
     except KeyError:
-        print("'" + page + "' to " newpage + "':" + result['error']['info'])
+        print("'" + page + "' to " newpage + "':" + moveresult['error']['info'])
 
 # Get list of pages with links to fix
 fixlist = set()
@@ -134,10 +133,9 @@ for page in pagelist:
         'lhlimit':"max",
         'format':"json"
     }
-    apicall = session.get(url=url, params=params_linkshere)
-    result = apicall.json()
+    
     try:
-        linkshere = result['query']['pages']["-1"]['linkshere'] # -1 will be provided as a placeholder for the page id for any missing page
+        linkshere = apiget(url, params_linkshere, session)['query']['pages']["-1"]['linkshere'] # -1 will be provided as a placeholder for the page id for any missing page
         for p in linkshere:
             fixlist.add(p['title'])
     except KeyError:
@@ -163,10 +161,8 @@ for title in fixlist:
         'format':"json"
     }
     
-    apicall = session.get(url, params= params_listentry)
-    result = apicall.json()
     # Make replacements
-    pagetext = result['parse']['wikitext']['*']
+    pagetext = apiget(url, params_listentry, session)['parse']['wikitext']['*']
     for a, b in regexdict.items():
         pagetext = re.sub(a, b, pagetext)
 
@@ -181,10 +177,9 @@ for title in fixlist:
         'format':"json"
     }
     
-    apicall = session.post(url, data= params_editpage)
-    result = apicall.json()
+    editcommit = apipost(url, params_editpage, session)
     try:
-        status = result['edit']['result']
+        status = editcommit['edit']['result']
         if status == 'Success':
             print("Links on '" + title + "' updated.")
         else:
@@ -193,4 +188,5 @@ for title in fixlist:
         print("WARNING: Success message not received for '" + title + "'!")
         
 # Logout
-session.post(url, data= {'action':"logout"})
+apipost(url, {'action':"logout",'format':"json"}, session)
+print("Logged out.")

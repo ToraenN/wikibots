@@ -4,11 +4,21 @@
 
 import re
 import requests
+from getpass import getpass
 
-# Either hardcode the credentials here, or use the input boxes. 
+def apiget(url, parameters, session):
+    apicall = session.get(url=url, params=parameters)
+    result = apicall.json()
+    return result
+
+def apipost(url, parameters, session):
+    apicall = session.post(url=url, data=parameters)
+    result = apicall.json()
+    return result
+
 # Using the main account for login is not supported. Obtain credentials via Special:BotPasswords
 username = input("Bot username: ")
-password = input("Bot password: ")
+password = getpass("Bot password: ")
 url = "https://gwpvx.gamepedia.com/api.php"
 session = requests.Session()
 
@@ -20,10 +30,7 @@ params_tokens = {
     'format':"json"
 }
 
-apicall = session.get(url=url, params=params_tokens)
-result = apicall.json()
-
-logintoken = result['query']['tokens']['logintoken']
+logintoken = apiget(url, params_tokens, session)['query']['tokens']['logintoken']
 
 # Then we can login
 params_login = {
@@ -34,11 +41,9 @@ params_login = {
     'format':"json"
 }
 
-apicall = session.post(url, data=params_login)
-result = apicall.json()
-loggedin = result['login']['result']
-print("Login " + loggedin + "!")
-del params_login
+loggedin = apipost(url, params_login, session)['login']['result']
+input("Login " + loggedin + "!")
+del params_login, username, password
 if loggedin != 'Success':
     raise SystemExit()
 
@@ -49,16 +54,14 @@ params_edittoken = {
     'format':"json"
 }
 
-apicall = session.post(url, data= params_edittoken)
-result = apicall.json()
+edittoken = apipost(url, params_edittoken, session)['query']['tokens']['csrftoken']
 
-edittoken = result['query']['tokens']['csrftoken']
-    
 # Prompt for the username
 username = input("\nUsername: ")
 
 if username == "":
-    session.post(url, data= {'action':"logout"})
+    apipost(url, {'action':"logout",'format':"json"}, session)
+    print("Logged out.")
     raise SystemExit()
 
 # Retrieve all userspace subpages
@@ -78,12 +81,9 @@ params_usertalks = {
     'aplimit':"max",
     'format':"json"
 }
-apicall = session.get(url=url, params=params_userpages)
-result = apicall.json()
-userpages = result['query']['allpages']
-apicall = session.get(url=url, params=params_usertalks)
-result = apicall.json()
-usertalks = result['query']['allpages']
+
+userpages = apiget(url, params_userpages, session)['query']['allpages']
+usertalks = apiget(url, params_usertalks, session)['query']['allpages']
 pagelist = set()
 for page in userpages:
     if re.search("User:" + username + "(/|$)", page['title']) != None:
@@ -95,7 +95,8 @@ for page in usertalks:
 # Confirm the pages to be deleted
 response = input(str(len(pagelist)) + ' pages to be deleted. Continue? (y/n) ')
 if response != 'y':
-    session.post(url, data= {'action':"logout"})
+    apipost(url, {'action':"logout",'format':"json"}, session)
+    print("Logged out.")
     raise SystemExit()
 
 # Save list of pages, in case mass undelete is needed
@@ -114,14 +115,13 @@ for page in pagelist:
         'token':edittoken
     }
     
-    apicall = session.post(url=url, data=params_delete)
-    result = apicall.json()
-    
     try:
-        result['delete']
+        apipost(url, params_delete, session)['delete']
         print("'" + page + "' deleted.")
     except KeyError:
         print("Could not delete '" + page + "'. Error code: " + result['error']['code'])
 
 # Logout
-session.post(url, data= {'action':"logout"})
+apipost(url, {'action':"logout",'format':"json"}, session)
+print("Logged out.")
+

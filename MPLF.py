@@ -4,12 +4,35 @@
 
 import re
 import requests
+from getpass import getpass
 
-# Either hardcode the credentials here, or use the input boxes. 
+def inputint(prompt):
+    answer = input(prompt)
+    try:
+        answer = int(answer)
+    except:
+        pass
+    while isinstance(answer, int) == False:
+        try:
+            answer = int(input('Invalid entry, please enter an integer: '))
+        except:
+            pass
+    return answer
+
+def apiget(url, parameters, session):
+    apicall = session.get(url=url, params=parameters)
+    result = apicall.json()
+    return result
+
+def apipost(url, parameters, session):
+    apicall = session.post(url=url, data=parameters)
+    result = apicall.json()
+    return result
+
 # Using the main account for login is not supported. Obtain credentials via Special:BotPasswords
 # The only permissions you need to give to the bot password are 'high volume editing' and 'edit existing pages'.
 username = input("Bot username: ")
-password = input("Bot password: ")
+password = getpass("Bot password: ")
 url = "https://gwpvx.gamepedia.com/api.php"
 session = requests.Session()
 
@@ -21,10 +44,7 @@ params_tokens = {
     'format':"json"
 }
 
-apicall = session.get(url=url, params=params_tokens)
-result = apicall.json()
-
-logintoken = result['query']['tokens']['logintoken']
+logintoken = apiget(url, params_tokens, session)['query']['tokens']['logintoken']
 
 # Then we can login
 params_login = {
@@ -35,11 +55,11 @@ params_login = {
     'format':"json"
 }
 
-apicall = session.post(url, data=params_login)
-result = apicall.json()
-loggedin = result['login']['result']
-print("Login " + loggedin + "!")
-del params_login
+loggedin = apipost(url, params_login, session)['login']['result']
+input("Login " + loggedin + "!")
+del params_login, username, password
+if loggedin != 'Success':
+    raise SystemExit()
 regexdict = dict()
 titlelist = set()
 
@@ -50,10 +70,7 @@ params_edittoken = {
     'format':"json"
 }
 
-apicall = session.post(url, data= params_edittoken)
-result = apicall.json()
-
-edittoken = result['query']['tokens']['csrftoken']
+edittoken = apipost(url, params_edittoken, session)['query']['tokens']['csrftoken']
 
 # Loop until user is done inputting jobs
 while loggedin == 'Success':
@@ -71,10 +88,9 @@ while loggedin == 'Success':
         'format':"json"
     }
 
-    apicall = session.post(url, data=params_linkshere)
-    result = apicall.json()
+	linkshere = apiget(url, params_linkshere, session)
     try:
-        pagelist = result['query']['pages']["-1"]['linkshere'] # -1 will be provided as a placeholder for the page id for any missing page
+        pagelist = linkshere['query']['pages']["-1"]['linkshere'] # -1 will be provided as a placeholder for the page id for any missing page
 
     except KeyError:
         print("'" + source + "' is not linked to.")
@@ -90,10 +106,7 @@ while loggedin == 'Success':
         'format':"json"
     }
     
-    apicall = session.get(url=url, params=params_movecheck)
-    result = apicall.json()
-    
-    movedlist = result['query']['logevents']
+    movedlist = apiget(url, params_movecheck, session)['query']['logevents']
     destinations = set()
     # Check if each destination exists
     for event in movedlist:
@@ -109,10 +122,7 @@ while loggedin == 'Success':
             'format':"json"
         }
         
-        apicall = session.get(url=url, params=params_movecheck)
-        result = apicall.json()
-        
-        appendlist = result['query']['logevents']
+        appendlist = apiget(url, params_movecheck, session)['query']['logevents']
         for item in appendlist:
             if not item in movedlist:
                 movedlist.append(item)
@@ -123,11 +133,9 @@ while loggedin == 'Success':
             'format':"json"
         }
         
-        apicall = session.get(url=url, params=params_existcheck)
-        result = apicall.json()
-        
+        destexist = apiget(url, params_existcheck, session)
         try:
-            result['query']['pages']['-1']
+            destexist['query']['pages']['-1']
         except KeyError:
             destinations.add(movetarget)
     destinations = list(destinations)
@@ -141,7 +149,8 @@ while loggedin == 'Success':
         try:
             destination = destinations[int(input(destquery))]
         except:
-            print("Invalid entry. Skipping '" + source + "'.")
+            print("No destination found for '" + source + "'.")
+            destination = ""
     else:
         print("No destinations found for '" + source + "'.")
     # Return to source input if destination is blank
@@ -176,10 +185,8 @@ for title in titlelist:
         'format':"json"
     }
     
-    apicall = session.post(url, data= params_listentry)
-    result = apicall.json()
     # Make replacements
-    pagetext = result['parse']['wikitext']['*']
+    pagetext = apiget(url, params_listentry, session)['parse']['wikitext']['*']
     for a, b in regexdict.items():
         pagetext = re.sub(a, b, pagetext)
 
@@ -194,10 +201,9 @@ for title in titlelist:
         'format':"json"
     }
     
-    apicall = session.post(url, data= params_editpage)
-    result = apicall.json()
+    editcommit = apipost(url, params_editpage, session)
     try:
-        status = result['edit']['result']
+        status = editcommit['edit']['result']
         if status == 'Success':
             print("Links on '" + title + "' updated.")
         else:
@@ -205,4 +211,5 @@ for title in titlelist:
     except KeyError:
         print("WARNING: Success message not received for '" + title + "'!")
 # Logout
-session.post(url, data= {'action':"logout"})
+apipost(url, {'action':"logout",'format':"json"}, session)
+print("Logged out.")

@@ -3,11 +3,21 @@
 """
 
 import requests
+from getpass import getpass
 
-# Either hardcode the credentials here, or use the input boxes. 
+def apiget(url, parameters, session):
+    apicall = session.get(url=url, params=parameters)
+    result = apicall.json()
+    return result
+
+def apipost(url, parameters, session):
+    apicall = session.post(url=url, data=parameters)
+    result = apicall.json()
+    return result
+
 # Using the main account for login is not supported. Obtain credentials via Special:BotPasswords
 username = input("Bot username: ")
-password = input("Bot password: ")
+password = getpass("Bot password: ")
 url = "https://gwpvx.gamepedia.com/api.php"
 session = requests.Session()
 
@@ -19,10 +29,7 @@ params_tokens = {
     'format':"json"
 }
 
-apicall = session.get(url=url, params=params_tokens)
-result = apicall.json()
-
-logintoken = result['query']['tokens']['logintoken']
+logintoken = apiget(url, params_tokens, session)['query']['tokens']['logintoken']
 
 # Then we can login
 params_login = {
@@ -33,11 +40,9 @@ params_login = {
     'format':"json"
 }
 
-apicall = session.post(url, data=params_login)
-result = apicall.json()
-loggedin = result['login']['result']
-print("Login " + loggedin + "!")
-del params_login
+loggedin = apipost(url, params_login, session)['login']['result']
+input("Login " + loggedin + "!")
+del params_login, username, password
 if loggedin != 'Success':
     raise SystemExit()
 
@@ -48,13 +53,10 @@ params_edittoken = {
     'format':"json"
 }
 
-apicall = session.post(url, data= params_edittoken)
-result = apicall.json()
-
-edittoken = result['query']['tokens']['csrftoken']
+edittoken = apipost(url, params_edittoken, session)['query']['tokens']['csrftoken']
 
 # Prompt user for bot to correct
-botname = input("Bot username: ")
+botname = input("Reverse deletions by user: ")
 
 # Check delete log
 params_deletecheck = {
@@ -67,9 +69,7 @@ params_deletecheck = {
     'format':"json"
 }
 
-apicall = session.get(url=url, params=params_deletecheck)
-result = apicall.json()
-deletedlist = result['query']['logevents']
+deletedlist = apiget(url, params_deletecheck, session)['query']['logevents']
 restorelist = list()
 for event in deletedlist:
     if event['action'] == 'delete':
@@ -84,11 +84,8 @@ for title in restorelist:
         'format':"json"
     }
     
-    apicall = session.get(url=url, params=params_existcheck)
-    result = apicall.json()
-    
     try:
-        result['query']['pages']['-1']
+        apiget(url, params_existcheck, session)['query']['pages']['-1']
     except KeyError:
         continue
     
@@ -103,10 +100,8 @@ for title in restorelist:
     response = input("Restore '" + title + "'? ")
     # Restore the page
     if response == 'y':
-        apicall = session.post(url=url, data=params_restore)
-        result = apicall.json()
         try:
-            result['undelete']
+            apipost(url, params_restore, session)['undelete']
             print("'" + title + "' restored.")
         except KeyError:
             print("Could not restore '" + title + "'. Error code: " + result['error']['code'])
@@ -115,4 +110,5 @@ for title in restorelist:
         break
 
 # Logout
-session.post(url, data= {'action':"logout"})
+apipost(url, {'action':"logout",'format':"json"}, session)
+print("Logged out.")
