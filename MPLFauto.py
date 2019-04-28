@@ -6,15 +6,15 @@ import re
 import requests
 from getpass import getpass
 
-def inputint(prompt):
+def inputint(prompt, limit):
     answer = input(prompt)
     try:
         answer = int(answer)
     except:
         pass
-    while isinstance(answer, int) == False:
+    while (isinstance(answer, int) == False) or (int(answer) not in range(limit)):
         try:
-            answer = int(input('Invalid entry, please enter an integer: '))
+            answer = int(input('Invalid entry, please enter an integer within range: '))
         except:
             pass
     return answer
@@ -62,7 +62,7 @@ if loggedin != 'Success':
     raise SystemExit()
 regexdict = dict()
 titlelist = set()
-starttime = str(inputint('Enter the time (UTC) to start searching the move log from (YYYYMMDDHHMMSS): ')).ljust(14, "0")
+starttime = str(inputint('Enter the time (UTC) to start searching the move log from (YYYYMMDDHHMMSS): ', 100000000000000)).ljust(14, "0")
 
 input('For each entry found, respond with "y" to add it to the list of links to be fixed.')
 
@@ -176,11 +176,7 @@ for source in movelist:
         for d in destinations:
             destquery += "\n" + str(destinations.index(d)) + ": " + str(d)
         destquery += "\nChoose the number of the destination: "
-        try:
-            destination = destinations[int(input(destquery))]
-        except:
-            print("No destination found for '" + source + "'.")
-            destination = ""
+        destination = destinations[inputint(destquery, len(destinations))]
     elif len(destinations) == 1:
         destination = destinations[0]
         print("Destination for '" + source + "' found: " + destination)

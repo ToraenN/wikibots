@@ -8,15 +8,15 @@ from getpass import getpass
 from datetime import datetime, date, time
 from time import sleep
 
-def inputint(prompt):
+def inputint(prompt, limit):
     answer = input(prompt)
     try:
         answer = int(answer)
     except:
         pass
-    while isinstance(answer, int) == False:
+    while (isinstance(answer, int) == False) or (int(answer) not in range(limit)):
         try:
-            answer = int(input('Invalid entry, please enter an integer: '))
+            answer = int(input('Invalid entry, please enter an integer within range: '))
         except:
             pass
     return answer
@@ -185,11 +185,7 @@ try:
                 for d in destinations:
                     destquery += "\n" + str(destinations.index(d)) + ": " + str(d)
                 destquery += "\nChoose the number of the destination: "
-                try:
-                    destination = destinations[int(input(destquery))]
-                except:
-                    print("No destination found for '" + source + "'.")
-                    destination = ""
+                destination = destinations[inputint(destquery, len(destinations))]
             elif len(destinations) == 1:
                 destination = destinations[0]
                 print("Destination for '" + source + "' found: " + destination)

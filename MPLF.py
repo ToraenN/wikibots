@@ -6,15 +6,15 @@ import re
 import requests
 from getpass import getpass
 
-def inputint(prompt):
+def inputint(prompt, limit):
     answer = input(prompt)
     try:
         answer = int(answer)
     except:
         pass
-    while isinstance(answer, int) == False:
+    while (isinstance(answer, int) == False) or (int(answer) not in range(limit)):
         try:
-            answer = int(input('Invalid entry, please enter an integer: '))
+            answer = int(input('Invalid entry, please enter an integer within range: '))
         except:
             pass
     return answer
@@ -88,7 +88,7 @@ while loggedin == 'Success':
         'format':"json"
     }
 
-	linkshere = apiget(url, params_linkshere, session)
+    linkshere = apiget(url, params_linkshere, session)
     try:
         pagelist = linkshere['query']['pages']["-1"]['linkshere'] # -1 will be provided as a placeholder for the page id for any missing page
 
@@ -146,11 +146,7 @@ while loggedin == 'Success':
         for d in destinations:
             destquery += "\n" + str(destinations.index(d)) + ": " + str(d)
         destquery += "\nChoose the number of the destination: "
-        try:
-            destination = destinations[int(input(destquery))]
-        except:
-            print("No destination found for '" + source + "'.")
-            destination = ""
+        destination = destinations[inputint(destquery, len(destinations))]
     else:
         print("No destinations found for '" + source + "'.")
     # Return to source input if destination is blank
