@@ -36,46 +36,65 @@ def apipost(url, parameters, session):
     result = apicall.json()
     return result
 
-# Using the main account for login is not supported. Obtain credentials via Special:BotPasswords
-# The only permissions you need to give to the bot password are 'high volume editing' and 'edit existing pages'.
-username = input("Bot username: ")
-password = getpass("Bot password: ")
-url = "https://gwpvx.gamepedia.com/api.php"
-session = requests.Session()
+def startup(url, session):
+    # Using the main account for login is not supported. Obtain credentials via Special:BotPasswords
+    # The only permissions you need to give to the bot password are 'high volume editing' and 'edit existing pages'.
+    username = input("Bot username: ")
+    password = getpass("Bot password: ")
+    
+    # Retrieve login token first
+    params_tokens = {
+        'action':"query",
+        'meta':"tokens",
+        'type':"login",
+        'format':"json"
+    }
+    
+    logintoken = apiget(url, params_tokens, session)['query']['tokens']['logintoken']
+    
+    # Then we can login
+    params_login = {
+        'action':"login",
+        'lgname':username,
+        'lgpassword':password,
+        'lgtoken':logintoken,
+        'format':"json"
+    }
+    
+    loggedin = apipost(url, params_login, session)['login']['result']
+    print("Login " + loggedin + "!")
+    del params_login, username, password
+    if loggedin != 'Success':
+        raise SystemExit()
+    
+    # Get an edit token
+    params_edittoken = {
+        'action':"query",
+        'meta':"tokens",
+        'format':"json"
+    }
+    
+    edittoken = apipost(url, params_edittoken, session)['query']['tokens']['csrftoken']
+    return edittoken
 
-# Retrieve login token first
-params_tokens = {
-    'action':"query",
-    'meta':"tokens",
-    'type':"login",
-    'format':"json"
-}
-
-logintoken = apiget(url, params_tokens, session)['query']['tokens']['logintoken']
-
-# Then we can login
-params_login = {
-    'action':"login",
-    'lgname':username,
-    'lgpassword':password,
-    'lgtoken':logintoken,
-    'format':"json"
-}
-
-loggedin = apipost(url, params_login, session)['login']['result']
-input("Login " + loggedin + "!")
-del params_login, username, password
-if loggedin != 'Success':
+def logout(url, session):
+    apipost(url, {'action':"logout",'format':"json"}, session)
+    print("Logged out.")
     raise SystemExit()
 
-# Get an edit token
-params_edittoken = {
-    'action':"query",
-    'meta':"tokens",
-    'format':"json"
-}
+def pageexist(page, url, session):
+    params_existcheck = {
+        'action':"query",
+        'titles':page,
+        'format':"json"
+    }
+    
+    result = apiget(url, params_existcheck, session)
+    return result
 
-edittoken = apipost(url, params_edittoken, session)['query']['tokens']['csrftoken']
+url = "https://gwpvx.gamepedia.com/api.php"
+session = requests.Session()
+edittoken = startup(url, session)
 
 #Initial timestamp
 boundtime = starttimestamp()
@@ -167,13 +186,7 @@ try:
                 for item in appendlist:
                     if not item in movedlist:
                         movedlist.append(item)
-                params_existcheck = {
-                    'action':"query",
-                    'titles':movetarget,
-                    'format':"json"
-                }
-                
-                destexist = apiget(url, params_existcheck, session)
+                destexist = pageexist(movetarget, url, session)
                 try:
                     destexist['query']['pages']['-1']
                 except KeyError:
@@ -195,13 +208,7 @@ try:
             # Return to source input if destination is blank or doesn't exist
             if destination == "":
                     continue
-            params_existcheck = {
-                'action':"query",
-                'titles':destination,
-                'format':"json"
-            }
-            
-            destexist = apiget(url, params_existcheck, session)
+            destexist = pageexist(destination, url, session)
             try:
                 destexist['query']['pages']['-1']
                 print("That destination does not exist!")
@@ -260,6 +267,4 @@ try:
         #Wait a bit
         sleep(60)
 except KeyboardInterrupt:
-    # Logout
-    apipost(url, {'action':"logout",'format':"json"}, session)
-    print("Logged out.")
+    logout(url, session)

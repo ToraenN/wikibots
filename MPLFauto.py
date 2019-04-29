@@ -29,51 +29,69 @@ def apipost(url, parameters, session):
     result = apicall.json()
     return result
 
-# Using the main account for login is not supported. Obtain credentials via Special:BotPasswords
-# The only permissions you need to give to the bot password are 'high volume editing' and 'edit existing pages'.
-username = input("Bot username: ")
-password = getpass("Bot password: ")
+def startup(url, session):
+    # Using the main account for login is not supported. Obtain credentials via Special:BotPasswords
+    # The only permissions you need to give to the bot password are 'high volume editing' and 'edit existing pages'.
+    username = input("Bot username: ")
+    password = getpass("Bot password: ")
+    
+    # Retrieve login token first
+    params_tokens = {
+        'action':"query",
+        'meta':"tokens",
+        'type':"login",
+        'format':"json"
+    }
+    
+    logintoken = apiget(url, params_tokens, session)['query']['tokens']['logintoken']
+    
+    # Then we can login
+    params_login = {
+        'action':"login",
+        'lgname':username,
+        'lgpassword':password,
+        'lgtoken':logintoken,
+        'format':"json"
+    }
+    
+    loggedin = apipost(url, params_login, session)['login']['result']
+    print("Login " + loggedin + "!")
+    del params_login, username, password
+    if loggedin != 'Success':
+        raise SystemExit()
+    
+    # Get an edit token
+    params_edittoken = {
+        'action':"query",
+        'meta':"tokens",
+        'format':"json"
+    }
+    
+    edittoken = apipost(url, params_edittoken, session)['query']['tokens']['csrftoken']
+    return edittoken
+
+def logout(url, session):
+    apipost(url, {'action':"logout",'format':"json"}, session)
+    print("Logged out.")
+    raise SystemExit()
+
+def pageexist(page, url, session):
+    params_existcheck = {
+        'action':"query",
+        'titles':page,
+        'format':"json"
+    }
+    
+    result = apiget(url, params_existcheck, session)
+    return result
+
 url = "https://gwpvx.gamepedia.com/api.php"
 session = requests.Session()
-
-# Retrieve login token first
-params_tokens = {
-    'action':"query",
-    'meta':"tokens",
-    'type':"login",
-    'format':"json"
-}
-
-logintoken = apiget(url, params_tokens, session)['query']['tokens']['logintoken']
-
-# Then we can login
-params_login = {
-    'action':"login",
-    'lgname':username,
-    'lgpassword':password,
-    'lgtoken':logintoken,
-    'format':"json"
-}
-
-loggedin = apipost(url, params_login, session)['login']['result']
-input("Login " + loggedin + "!")
-del params_login, username, password
-if loggedin != 'Success':
-    raise SystemExit()
+edittoken = startup(url, session)
 regexdict = dict()
 titlelist = set()
 starttime = str(inputint('Enter the time (UTC) to start searching the move log from (YYYYMMDDHHMMSS): ', 100000000000000)).ljust(14, "0")
-
-input('For each entry found, respond with "y" to add it to the list of links to be fixed.')
-
-# Get an edit token
-params_edittoken = {
-    'action':"query",
-    'meta':"tokens",
-    'format':"json"
-}
-
-edittoken = apipost(url, params_edittoken, session)['query']['tokens']['csrftoken']
+getpass('For each entry found, respond with "y" to add it to the list of links to be fixed.')
 
 # Access the move log
 movelist = []
@@ -92,14 +110,7 @@ entrylist = apiget(url, params_movelog, session)['query']['logevents']
 for rawentry in entrylist:
     moveentry = rawentry['title']
     # Check if the page exists (so we can ignore redirects/recreated pages)
-    params_exist = {
-        'action':"query",
-        'titles':moveentry,
-        'format':"json"
-    }
-    
-    sourceexist = apiget(url, params_exist, session)
-    
+    sourceexist = pageexist(moveentry, url, session)
     try:
         sourceexist['query']['pages']['-1']
     except KeyError:
@@ -186,13 +197,7 @@ for source in movelist:
     # Return to source input if destination is blank or doesn't exist
     if destination == "":
             continue
-    params_existcheck = {
-        'action':"query",
-        'titles':destination,
-        'format':"json"
-    }
-    
-    destexist = apiget(url, params_existcheck, session)
+    destexist = pageexist(destination, url, session)
     try:
         destexist['query']['pages']['-1']
         print("That destination does not exist!")
@@ -248,6 +253,4 @@ for title in titlelist:
             raise KeyError
     except KeyError:
         print("WARNING: Success message not received for '" + title + "'!")
-# Logout
-apipost(url, {'action':"logout",'format':"json"}, session)
-print("Logged out.")
+logout(url, session)
