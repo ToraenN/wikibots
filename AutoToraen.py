@@ -58,53 +58,6 @@ def startup(url, session):
     edittoken = apipost(url, params_edittoken, session)['query']['tokens']['csrftoken']
     return edittoken
 
-def readmovelog(url, time, session):
-    params_movelog = {
-        'action':"query",
-        'list':"logevents",
-        'leprop':"type|title|details",
-        'letype':"move",
-        'lelimit':"max",
-        'ledir':"newer",
-        'lestart':time,
-        'format':"json"
-    }
-    
-    entrylist = apiget(url, params_movelog, session)['query']['logevents']
-    return entrylist
-
-def filtermovelist(entrylist, url, session):
-    for rawentry in entrylist:
-        moveentry = rawentry['title']
-        # Check if the page exists (so we can ignore redirects/recreated pages)
-        sourceexist = pageexist(moveentry, url, session)
-        try:
-            sourceexist['query']['pages']['-1']
-        except KeyError:
-            print("Skipped " + moveentry + ". Page exists.")
-            continue
-        # Check if anything still links to title in the move log entry
-        params_linkshere = {
-            'action':"query",
-            'prop':"linkshere",
-            'titles':moveentry,
-            'lhlimit':"max",
-            'format':"json"
-        }
-
-        linkshere = apiget(url, params_linkshere, session)
-        try:
-            pagelist = linkshere['query']['pages']["-1"]['linkshere'] # -1 will be provided as a placeholder for the page id for any missing page
-        except KeyError:
-            print("Skipped " + moveentry + ". No links found.")
-            continue
-        answer = input("Add " + moveentry + " to list of links to update? ")
-        if "y" in answer:
-            for p in pagelist:
-                titlelist.add(p['title'])
-            movelist.append(moveentry)
-    return movelist
-
 def getuserpages(username, url, session):
     # Retrieve all userspace subpages
     params_userpages = {
@@ -135,7 +88,7 @@ def getuserpages(username, url, session):
             pagelist.add(page['title'])
     return pagelist
 
-def checklog(action, url, session, username = None, timestamp = None):
+def checklog(action, url, session, title = None, username = None, timestamp = None):
     params_logcheck = {
         'action':"query",
         'list':"logevents",
@@ -145,11 +98,17 @@ def checklog(action, url, session, username = None, timestamp = None):
         'ledir':"newer",
         'format':"json"
     }
+    if timestamp == "00000000000000": # Considered an invalid time by the API
+        timestamp = None
+    if username == "": # Blank username would return an API error message
+        username = None
     if username != None:
         params_logcheck.update({'leuser':username})
     if timestamp != None:
         params_logcheck.update({'lestart':timestamp})
-    loglist = apiget(url, params_logcheck, session)
+    if title != None:
+        params_logcheck.update({'letitle':title})
+    loglist = apiget(url, params_logcheck, session)['query']['logevents']
     return loglist
 
 def pageexist(page, url, session):
@@ -160,7 +119,11 @@ def pageexist(page, url, session):
     }
     
     result = apiget(url, params_existcheck, session)
-    return result
+    try:
+        result['query']['pages']['-1']
+        return False #Page does not exist
+    except KeyError:
+        return True #Page exists
 
 def editpage(page, pagetext, reason, edittoken, url, session):
     params_editpage = {
@@ -225,7 +188,7 @@ def checkbrokenlinks(page, url, session):
         for p in linkshere:
             brokenlinkpages.add(p['title'])
     except KeyError:
-        pass # Page still exists, so don't change any links to it
+        pass # Page still exists or has no links
     return brokenlinkpages
 
 def updatelinks(page, regexdict, edittoken, url, session):
@@ -303,6 +266,83 @@ def refreshtimestamp():
     timestamp = (timestamp.split("."))[0]
     return timestamp
 
+def parsemoveentries(moveentries, url, session):
+    movelist = []
+    titlelist = set()
+    for entry in moveentries:
+        title = entry['title']
+        # Check if the page exists (so we can ignore redirects/recreated pages)
+        if pageexist(title, url, session):
+            print("Skipped " + title + ". Page exists.")
+            continue
+        # Check if anything still links to title in the move log entry
+        brokenlinkpages = checkbrokenlinks(title, url, session)
+        if len(brokenlinkpages) == 0:
+            print("Skipped " + title + ". No links found.")
+            continue
+        answer = input("Add " + title + " to list of links to update? ")
+        if "y" in answer:
+            for p in brokenlinkpages:
+                titlelist.add(p)
+            movelist.append(title)
+    return movelist, titlelist
+
+def finddestinations(movelist, url, session, username = None, timestamp = None, prompt = True):
+    regexdict = dict()
+    for source in movelist:
+        # Check move log for destination
+        movedlist = checklog('move', url, session, title = source, username = username, timestamp = timestamp)
+        destinations = set()
+        # Check if each destination exists
+        for event in movedlist:
+            movetarget = event['params']['target_title']
+            # Maybe possibly will work and not cause infinite recursion - should allow script to follow multiple moves
+            appendlist = checklog('move', url, session, title = movetarget, username = username, timestamp = timestamp)
+            for item in appendlist:
+                if not item in movedlist:
+                    movedlist.append(item)
+            
+            destexist = pageexist(movetarget, url, session)
+            if destexist:
+                destinations.add(movetarget)
+        destinations = list(destinations)
+        # Only display the existing destinations
+        if (len(destinations) > 1) and (prompt == True):
+            destquery = "Found " + str(len(destinations)) + " possible destinations for '" + source + "':"
+            for d in destinations:
+                destquery += "\n" + str(destinations.index(d)) + ": " + str(d)
+            destquery += "\nChoose the number of the destination: "
+            destination = destinations[inputint(destquery, len(destinations))]
+        elif (len(destinations) > 1) and (prompt == False):
+            print("Multiple destinations found for " + source + ". Skipping (use other mode).")
+            destination = ""
+        elif len(destinations) == 1:
+            destination = destinations[0]
+            print("Destination for '" + source + "' found: " + destination)
+        else:
+            print("No destination found for '" + source + "'.")
+            destination = ""
+        # Return to source input if destination is blank or doesn't exist
+        if destination == "":
+                continue
+        if not pageexist(destination, url, session):
+            print("That destination does not exist!")
+            continue
+
+        # Build the regexes for finding links
+        regex1 = re.compile("\[+" + source.replace("'", "(%27|')").replace(":", "(%3A|:)").replace(" ", "[_ ]").replace(":", "\:[_ ]{0,1}") + "[_ ]{0,1}(?=[\]\|#])", re.I) # This covers most wikilinks
+        regex2 = re.compile("\{+" + source.replace("'", "(%27|')").replace(":", "(%3A|:)").replace(" ", "[_ ]").replace(":", "\|[_ ]{0,1}") + "[_ ]{0,1}\}+", re.I) # This one is for the {{Build}} template used for the admin noticeboard/user talks
+
+        # Build the replace strings
+        replace1 = "[[" + destination
+        # If the destination is not another Build: namespace article, the {{Build}} template needs to be replaced with a link
+        if re.search("^Build:", destination) != None:
+            replace2 = "{{" + destination.replace(":", "|") + "}}"
+        else:
+            replace2 = "[[" + destination + "]]"
+        regexdict.update({regex1:replace1, regex2:replace2})
+    return regexdict
+
 url = "https://gwpvx.gamepedia.com/api.php"
 session = requests.Session()
 edittoken = startup(url, session)
@@ -317,26 +357,36 @@ if jobid == 0:
         pass
     if subjobid == 1:
         settime = settimestamp('move log')
+        username = input('Limit to user: ')
+        moveentries = checklog('move', url, session, username, settime)
+        movelist, titlelist = parsemoveentries(moveentries, url, session)
+        regexdict = finddestinations(movelist, url, session, timestamp = settime)
+        for title in titlelist:
+            updatelinks(title, regexdict, edittoken, url, session)
     if subjobid == 2:
-        pass
+        settime = refreshtimestamp()
+        while True:
+            moveentries = checklog('move', url, session, timestamp = settime)
+            if len(moveentries) == 0:
+                print("No moves detected since " + settime + "!")
+            settime = refreshtimestamp()
+            movelist, titlelist = parsemoveentries(moveentries, url, session)
+            regexdict = finddestinations(movelist, url, session, timestamp = settime, prompt = False)
+            for title in titlelist:
+                updatelinks(title, regexdict, edittoken, url, session)
+            sleep(60)
 elif jobid == 1:
     # Reverse deletions
     settime = settimestamp('delete log')
     username = input('Limit to user: ')
-    if settime == "00000000000000":
-        settime = None
-    if username == "":
-        username = None
-    deletelog = checklog('delete', url, session, username = username, timestamp = settime)['query']['logevents']
+    deletelog = checklog('delete', url, session, username = username, timestamp = settime)
     print("For each entry, enter one of the following:\n'y': restore the page.\n'd': end the script.\nLeave blank to ignore the page.")
     for entry in deletelog:
         title = entry['title']
         # Skip recreated pages and restore entries
         if entry['action'] != 'delete':
             continue
-        try:
-            pageexist(title, url, session)['query']['pages']['-1']
-        except KeyError:
+        if pageexist(title, url, session):
             continue
         response = input("Restore '" + title + "'? ")
         # Restore the page
