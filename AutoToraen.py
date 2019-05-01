@@ -108,7 +108,8 @@ def checklog(action, url, session, title = None, username = None, timestamp = No
         params_logcheck.update({'lestart':timestamp})
     if title != None:
         params_logcheck.update({'letitle':title})
-    loglist = apiget(url, params_logcheck, session)['query']['logevents']
+    loglist = apiget(url, params_logcheck, session)
+    loglist = loglist['query']['logevents']
     return loglist
 
 def pageexist(page, url, session):
@@ -236,8 +237,13 @@ def restorepage(page, reason, edittoken, url, session):
         'format':"json"
     }
     
-    restore = apipost(url, params_restore, session)
-    return restore
+    result = apipost(url, params_restore, session)
+    try:
+        result['undelete']
+        print("'" + title + "' restored.")
+    except KeyError:
+        print("Could not restore '" + title + "'. Error code: " + result['error']['code'])
+    return result
 
 def logout(url, session):
     apipost(url, {'action':"logout",'format':"json"}, session)
@@ -356,30 +362,30 @@ if jobid == 0:
     if subjobid == 0:
         pass
     if subjobid == 1:
-        settime = settimestamp('move log')
+        timestamp = settimestamp('move log')
         username = input('Limit to user: ')
-        moveentries = checklog('move', url, session, username, settime)
+        moveentries = checklog('move', url, session, username = username, timestamp = timestamp)
         movelist, titlelist = parsemoveentries(moveentries, url, session)
-        regexdict = finddestinations(movelist, url, session, timestamp = settime)
+        regexdict = finddestinations(movelist, url, session, timestamp = timestamp)
         for title in titlelist:
             updatelinks(title, regexdict, edittoken, url, session)
     if subjobid == 2:
-        settime = refreshtimestamp()
+        timestamp = refreshtimestamp()
         while True:
-            moveentries = checklog('move', url, session, timestamp = settime)
+            moveentries = checklog('move', url, session, timestamp = timestamp)
             if len(moveentries) == 0:
-                print("No moves detected since " + settime + "!")
-            settime = refreshtimestamp()
+                print("No moves detected since " + timestamp + "!")
+            timestamp = refreshtimestamp()
             movelist, titlelist = parsemoveentries(moveentries, url, session)
-            regexdict = finddestinations(movelist, url, session, timestamp = settime, prompt = False)
+            regexdict = finddestinations(movelist, url, session, timestamp = timestamp, prompt = False)
             for title in titlelist:
                 updatelinks(title, regexdict, edittoken, url, session)
             sleep(60)
 elif jobid == 1:
     # Reverse deletions
-    settime = settimestamp('delete log')
+    timestamp = settimestamp('delete log')
     username = input('Limit to user: ')
-    deletelog = checklog('delete', url, session, username = username, timestamp = settime)
+    deletelog = checklog('delete', url, session, username = username, timestamp = timestamp)
     print("For each entry, enter one of the following:\n'y': restore the page.\n'd': end the script.\nLeave blank to ignore the page.")
     for entry in deletelog:
         title = entry['title']
@@ -391,12 +397,7 @@ elif jobid == 1:
         response = input("Restore '" + title + "'? ")
         # Restore the page
         if response == 'y':
-            result = restorepage(title, "Reverting accidental deletion.", edittoken, url, session)
-            try:
-                result['undelete']
-                print("'" + title + "' restored.")
-            except KeyError:
-                print("Could not restore '" + title + "'. Error code: " + result['error']['code'])
+            restorepage(title, "Reverting accidental deletion.", edittoken, url, session)
         # Break the loop -> quit the script
         elif response == 'd':
             break
