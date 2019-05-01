@@ -135,6 +135,23 @@ def getuserpages(username, url, session):
             pagelist.add(page['title'])
     return pagelist
 
+def checklog(action, url, session, username = None, timestamp = None):
+    params_logcheck = {
+        'action':"query",
+        'list':"logevents",
+        'leprop':"type|title|details|user",
+        'letype':action,
+        'lelimit':"max",
+        'ledir':"newer",
+        'format':"json"
+    }
+    if username != None:
+        params_logcheck.update({'leuser':username})
+    if timestamp != None:
+        params_logcheck.update({'lestart':timestamp})
+    loglist = apiget(url, params_logcheck, session)
+    return loglist
+
 def pageexist(page, url, session):
     params_existcheck = {
         'action':"query",
@@ -247,6 +264,18 @@ def deletepage(page, reason, edittoken, url, session):
         print("Could not delete '" + page + "'. Error code: " + result['error']['code'])
     return result
 
+def restorepage(page, reason, edittoken, url, session):
+    params_restore = {
+        'action':"undelete",
+        'title':title,
+        'reason':reason,
+        'token':edittoken,
+        'format':"json"
+    }
+    
+    restore = apipost(url, params_restore, session)
+    return restore
+
 def logout(url, session):
     apipost(url, {'action':"logout",'format':"json"}, session)
     print("Logged out.")
@@ -293,6 +322,34 @@ if jobid == 0:
 elif jobid == 1:
     # Reverse deletions
     settime = settimestamp('delete log')
+    username = input('Limit to user: ')
+    if settime == "00000000000000":
+        settime = None
+    if username == "":
+        username = None
+    deletelog = checklog('delete', url, session, username = username, timestamp = settime)['query']['logevents']
+    print("For each entry, enter one of the following:\n'y': restore the page.\n'd': end the script.\nLeave blank to ignore the page.")
+    for entry in deletelog:
+        title = entry['title']
+        # Skip recreated pages and restore entries
+        if entry['action'] != 'delete':
+            continue
+        try:
+            pageexist(title, url, session)['query']['pages']['-1']
+        except KeyError:
+            continue
+        response = input("Restore '" + title + "'? ")
+        # Restore the page
+        if response == 'y':
+            result = restorepage(title, "Reverting accidental deletion.", edittoken, url, session)
+            try:
+                result['undelete']
+                print("'" + title + "' restored.")
+            except KeyError:
+                print("Could not restore '" + title + "'. Error code: " + result['error']['code'])
+        # Break the loop -> quit the script
+        elif response == 'd':
+            break
 elif jobid == 2:
     # Userspace move
     regexdict = dict()
