@@ -1,17 +1,19 @@
 # wikibots
-Here be my scripts for fixing the endless tide of maintenance issues on PvXwiki. Probably adaptable to other wikis, but most of them probably didn't let things get so bad in the first place.
+This is the script that powers AutoToraen. So far, it can do the following things:
 
-# MPLF: Moved Page Link Fixer
-Given a page name, tries to find the name it was moved to and fixes all links to point to the new name. Comes in three flavors:
-* MPLF: Manually enter pages
-* MPLFauto: Crawl the move log from a specific time to the present
-* MPLFlisten: Query the API every minute and act on any moves that occur.
+# Fix links of moved pages
+Given a page name, the script tries to find the name it was moved to (following move chains as needed) and fixes all links to point to the new name. Comes in three flavors:
+* Manually enter pages
+* Crawl the move log from a specific time to the present
+* Check the move log every minute and act on any moves that occur.
 
-# SWEEP: Userspace Sweeper
-Moves all of a userspaces subpages to a new name and updates links to them. Ignores the root pages since they were auto-moved when the username changed during database migration.
+# Reverse accidental deletions
+Crawls the delete log from a specific time to the present (and optionally restricted to a specific user's deletions) and prompts the script user to undelete pages.
 
-# RESIGN: Resign bot
+# Userspace moves
+Moves all of a userspaces subpages to a new name and updates links to them.
+
+# RESIGN
 Nukes a userspace as per a PvX:RESIGN request (leaving PvXwiki permanently, removing personal info)
 
-# Oops: Restore bot
-Crawls the delete log for a given username and prompts the script user to undelete pages.
+
