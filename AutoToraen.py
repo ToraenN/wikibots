@@ -245,33 +245,6 @@ def restorepage(page, reason, edittoken, url, session):
         print("Could not restore '" + title + "'. Error code: " + result['error']['code'])
     return result
 
-def logout(url, session):
-    apipost(url, {'action':"logout",'format':"json"}, session)
-    print("Logged out.")
-    raise SystemExit()
-
-def inputint(prompt, limit):
-    answer = input(prompt)
-    try:
-        answer = int(answer)
-    except:
-        pass
-    while (isinstance(answer, int) == False) or (int(answer) not in range(limit)):
-        try:
-            answer = int(input('Invalid entry, please enter an integer within range: '))
-        except:
-            pass
-    return answer
-
-def settimestamp(prompt):
-    timestamp = str(inputint('Enter the time (UTC) to start searching the ' + prompt + ' from (YYYYMMDDHHMMSS): ', 100000000000000)).ljust(14, "0")
-    return timestamp
-
-def refreshtimestamp():
-    timestamp = str(datetime.utcnow()).replace("-","").replace(" ","").replace(":","")
-    timestamp = (timestamp.split("."))[0]
-    return timestamp
-
 def parsemoveentries(moveentries, url, session):
     movelist = []
     titlelist = set()
@@ -349,6 +322,33 @@ def finddestinations(movelist, url, session, username = None, timestamp = None, 
         regexdict.update({regex1:replace1, regex2:replace2})
     return regexdict
 
+def inputint(prompt, limit):
+    answer = input(prompt)
+    try:
+        answer = int(answer)
+    except:
+        pass
+    while (isinstance(answer, int) == False) or (int(answer) not in range(limit)):
+        try:
+            answer = int(input('Invalid entry, please enter an integer within range: '))
+        except:
+            pass
+    return answer
+
+def settimestamp(prompt):
+    timestamp = str(inputint('Enter the time (UTC) to start searching the ' + prompt + ' from (YYYYMMDDHHMMSS): ', 100000000000000)).ljust(14, "0")
+    return timestamp
+
+def refreshtimestamp():
+    timestamp = str(datetime.utcnow()).replace("-","").replace(" ","").replace(":","")
+    timestamp = (timestamp.split("."))[0]
+    return timestamp
+
+def logout(url, session):
+    apipost(url, {'action':"logout",'format':"json"}, session)
+    print("Logged out.")
+    raise SystemExit()
+
 url = "https://gwpvx.gamepedia.com/api.php"
 session = requests.Session()
 edittoken = startup(url, session)
@@ -360,8 +360,33 @@ if jobid == 0:
     message = "Would you like to:\n0: Enter moves manually?\n1: Check the move log?\n2: Listen for moves?\nChoose a number: "
     subjobid = inputint(message, 3)
     if subjobid == 0:
-        pass
+        # Manual entry
+        movelist = set()
+        fixlist = set()
+        while True:
+            # Prompt user for the old name of the page
+            source = input("\nOld name: ")
+            # Break loop, and thus move to processing, if source is blank.
+            if source == "":
+                break
+            else:
+                if pageexist(source, url, session):
+                    print(source + " still exists.")
+                    continue
+                brokenlinkpages = checkbrokenlinks(source, url, session)
+                if len(brokenlinkpages) > 0:
+                    for b in brokenlinkpages:
+                        fixlist.add(b)
+                    movelist.add(source)
+                else:
+                    print("'" + source + "' is not linked to.")
+                print(len(fixlist), " pages currently to be updated.")
+
+        regexdict = finddestinations(movelist, url, session)
+        for f in fixlist:
+            updatelinks(f, regexdict, edittoken, url, session)
     if subjobid == 1:
+        # Check move log from specific date forward
         timestamp = settimestamp('move log')
         username = input('Limit to user: ')
         moveentries = checklog('move', url, session, username = username, timestamp = timestamp)
@@ -370,6 +395,7 @@ if jobid == 0:
         for title in titlelist:
             updatelinks(title, regexdict, edittoken, url, session)
     if subjobid == 2:
+        # Check the move log for new moves periodically
         timestamp = refreshtimestamp()
         while True:
             moveentries = checklog('move', url, session, timestamp = timestamp)
@@ -415,7 +441,7 @@ elif jobid == 2:
     for page in pagelist:
         newpage = re.sub(r'^User:' + oldusername, 'User:' + newusername, page)
         newpage = re.sub(r'^User talk:' + oldusername, 'User talk:' + newusername, newpage)
-        result = movepage(page, newpage, regexdict, edittoken, url, session)
+        movepage(page, newpage, regexdict, edittoken, url, session)
     # Get list of pages with links to fix
     for page in pagelist:
         brokenlinkpages = checkbrokenlinks(page, url, session)
