@@ -8,6 +8,153 @@ from getpass import getpass
 from datetime import datetime, date, time
 from time import sleep
 
+def main():
+    url = "https://gwpvx.gamepedia.com/api.php"
+    session = requests.Session()
+    edittoken = startup(url, session)
+
+    message = "What are you doing today?\n0: Updating links to moved pages.\n1: Reversing deletions.\n2: Moving userspace to new name.\n3: Resigning user.\n4: Update subpage links.\n5: Continue from crash.\nChoose the number of your job: "
+    jobid = inputint(message, 6)
+
+    if jobid == 0:
+        # Link fixing
+        mplf(url, edittoken, session)
+    elif jobid == 1:
+        # Reverse deletions
+        oops(url, edittoken, session)
+    elif jobid == 2:
+        # Userspace move
+        sweep(url, edittoken, session)
+    elif jobid == 3:
+        # Userspace delete
+        resign(url, edittoken, session)
+    elif jobid == 4:
+        # Change absolute links to subpages into relative links
+        pass
+    elif jobid == 5:
+        # Load files to continue from script crash
+        pass
+    logout(url, session)
+
+def mplf(url, edittoken, session):
+    message = "Would you like to:\n0: Enter moves manually?\n1: Check the move log?\n2: Listen for moves?\nChoose a number: "
+    subjobid = inputint(message, 3)
+    if subjobid == 0:
+        # Manual entry
+        movelist = set()
+        fixlist = set()
+        while True:
+            # Prompt user for the old name of the page
+            source = input("\nOld name: ")
+            # Break loop, and thus move to processing, if source is blank.
+            if source == "":
+                break
+            else:
+                if pageexist(source, url, session):
+                    print(source + " still exists.")
+                    continue
+                brokenlinkpages = checkbrokenlinks(source, url, session)
+                if len(brokenlinkpages) > 0:
+                    for b in brokenlinkpages:
+                        fixlist.add(b)
+                    movelist.add(source)
+                else:
+                    print("'" + source + "' is not linked to.")
+                print(len(fixlist), " pages currently to be updated.")
+
+        regexdict = finddestinations(movelist, url, session)
+        for f in fixlist:
+            updatelinks(f, regexdict, edittoken, url, session)
+    if subjobid == 1:
+        # Check move log from specific date forward
+        timestamp = settimestamp('move log')
+        username = input('Limit to user: ')
+        moveentries = checklog('move', url, session, username = username, timestamp = timestamp)
+        movelist, titlelist = parsemoveentries(moveentries, url, session)
+        regexdict = finddestinations(movelist, url, session, timestamp = timestamp)
+        for title in titlelist:
+            updatelinks(title, regexdict, edittoken, url, session)
+    if subjobid == 2:
+        # Check the move log for new moves periodically
+        timestamp = refreshtimestamp()
+        while True:
+            moveentries = checklog('move', url, session, timestamp = timestamp)
+            if len(moveentries) == 0:
+                print("No moves detected since " + timestamp + "!")
+            timestamp = refreshtimestamp()
+            movelist, titlelist = parsemoveentries(moveentries, url, session)
+            regexdict = finddestinations(movelist, url, session, timestamp = timestamp, prompt = False)
+            for title in titlelist:
+                updatelinks(title, regexdict, edittoken, url, session)
+            sleep(60)
+
+def oops(url, edittoken, session):
+    timestamp = settimestamp('delete log')
+    username = input('Limit to user: ')
+    deletelog = checklog('delete', url, session, username = username, timestamp = timestamp)
+    print("For each entry, enter one of the following:\n'y': restore the page.\n'd': end the script.\nLeave blank to ignore the page.")
+    for entry in deletelog:
+        title = entry['title']
+        # Skip recreated pages and restore entries
+        if entry['action'] != 'delete':
+            continue
+        if pageexist(title, url, session):
+            continue
+        response = input("Restore '" + title + "'? ")
+        # Restore the page
+        if response == 'y':
+            restorepage(title, "Reverting accidental deletion.", edittoken, url, session)
+        # Break the loop -> quit the script
+        elif response == 'd':
+            break
+
+def sweep(url, edittoken, session):
+    regexdict = dict()
+    fixlist = set()
+    # Prompt user for the old & new usernames
+    oldusername = input("\nOld username: ")
+    newusername = input("\nNew username: ")
+    if oldusername == "" or newusername == "":
+        logout(url, session)
+    pagelist = getuserpages(oldusername, url, session)
+    # Move pages
+    for page in pagelist:
+        newpage = re.sub(r'^User:' + oldusername, 'User:' + newusername, page)
+        newpage = re.sub(r'^User talk:' + oldusername, 'User talk:' + newusername, newpage)
+        movepage(page, newpage, regexdict, edittoken, url, session)
+    # Get list of pages with links to fix
+    for page in pagelist:
+        brokenlinkpages = checkbrokenlinks(page, url, session)
+        for b in brokenlinkpages:
+            fixlist.add(b)
+    # Save a copy of the link fix list and the regex dictionary, in case the script crashes
+    with open(oldusername + "-" + newusername + "-fixlist.txt", "a") as savelist:
+        for f in fixlist:
+            line = f + "\n"
+            savelist.write(line)
+    with open(oldusername + "-" + newusername + "-regex.txt", "a") as savedict:
+        for r in regexdict:
+            line = str(r) + " : " + regexdict[r] + "\n"
+            savedict.write(line)
+    # Fix links
+    for page in fixlist:
+        updatelinks(page, regexdict, edittoken, url, session)
+
+def resign(url, edittoken, session):
+    username = input("User to RESIGN: ")
+    pagelist = getuserpages(username, url, session)
+    # Confirm the pages to be deleted
+    response = input(str(len(pagelist)) + ' pages to be deleted. Continue? (y/n) ')
+    if response != 'y':
+        logout(url, session)
+    # Save list of pages, in case mass undelete is needed
+    with open("RESIGN-" + username + ".txt", "a") as savelist:
+        for p in pagelist:
+            line = p + "\n"
+            savelist.write(line)
+    for page in pagelist:
+        deletepage(page, "[[PvX:RESIGN]]", edittoken, url, session)
+
 def apiget(url, parameters, session):
     apicall = session.get(url=url, params=parameters)
     result = apicall.json()
@@ -349,135 +496,5 @@ def logout(url, session):
     print("Logged out.")
     raise SystemExit()
 
-url = "https://gwpvx.gamepedia.com/api.php"
-session = requests.Session()
-edittoken = startup(url, session)
-message = "What are you doing today?\n0: Updating links to moved pages.\n1: Reversing deletions.\n2: Moving userspace to new name.\n3: Resigning user.\n4: Update subpage links.\n5: Continue from crash.\nChoose the number of your job: "
-jobid = inputint(message, 6)
-
-if jobid == 0:
-    # Link fixing
-    message = "Would you like to:\n0: Enter moves manually?\n1: Check the move log?\n2: Listen for moves?\nChoose a number: "
-    subjobid = inputint(message, 3)
-    if subjobid == 0:
-        # Manual entry
-        movelist = set()
-        fixlist = set()
-        while True:
-            # Prompt user for the old name of the page
-            source = input("\nOld name: ")
-            # Break loop, and thus move to processing, if source is blank.
-            if source == "":
-                break
-            else:
-                if pageexist(source, url, session):
-                    print(source + " still exists.")
-                    continue
-                brokenlinkpages = checkbrokenlinks(source, url, session)
-                if len(brokenlinkpages) > 0:
-                    for b in brokenlinkpages:
-                        fixlist.add(b)
-                    movelist.add(source)
-                else:
-                    print("'" + source + "' is not linked to.")
-                print(len(fixlist), " pages currently to be updated.")
-
-        regexdict = finddestinations(movelist, url, session)
-        for f in fixlist:
-            updatelinks(f, regexdict, edittoken, url, session)
-    if subjobid == 1:
-        # Check move log from specific date forward
-        timestamp = settimestamp('move log')
-        username = input('Limit to user: ')
-        moveentries = checklog('move', url, session, username = username, timestamp = timestamp)
-        movelist, titlelist = parsemoveentries(moveentries, url, session)
-        regexdict = finddestinations(movelist, url, session, timestamp = timestamp)
-        for title in titlelist:
-            updatelinks(title, regexdict, edittoken, url, session)
-    if subjobid == 2:
-        # Check the move log for new moves periodically
-        timestamp = refreshtimestamp()
-        while True:
-            moveentries = checklog('move', url, session, timestamp = timestamp)
-            if len(moveentries) == 0:
-                print("No moves detected since " + timestamp + "!")
-            timestamp = refreshtimestamp()
-            movelist, titlelist = parsemoveentries(moveentries, url, session)
-            regexdict = finddestinations(movelist, url, session, timestamp = timestamp, prompt = False)
-            for title in titlelist:
-                updatelinks(title, regexdict, edittoken, url, session)
-            sleep(60)
-elif jobid == 1:
-    # Reverse deletions
-    timestamp = settimestamp('delete log')
-    username = input('Limit to user: ')
-    deletelog = checklog('delete', url, session, username = username, timestamp = timestamp)
-    print("For each entry, enter one of the following:\n'y': restore the page.\n'd': end the script.\nLeave blank to ignore the page.")
-    for entry in deletelog:
-        title = entry['title']
-        # Skip recreated pages and restore entries
-        if entry['action'] != 'delete':
-            continue
-        if pageexist(title, url, session):
-            continue
-        response = input("Restore '" + title + "'? ")
-        # Restore the page
-        if response == 'y':
-            restorepage(title, "Reverting accidental deletion.", edittoken, url, session)
-        # Break the loop -> quit the script
-        elif response == 'd':
-            break
-elif jobid == 2:
-    # Userspace move
-    regexdict = dict()
-    fixlist = set()
-    # Prompt user for the old & new usernames
-    oldusername = input("\nOld username: ")
-    newusername = input("\nNew username: ")
-    if oldusername == "" or newusername == "":
-        logout(url, session)
-    pagelist = getuserpages(oldusername, url, session)
-    # Move pages
-    for page in pagelist:
-        newpage = re.sub(r'^User:' + oldusername, 'User:' + newusername, page)
-        newpage = re.sub(r'^User talk:' + oldusername, 'User talk:' + newusername, newpage)
-        movepage(page, newpage, regexdict, edittoken, url, session)
-    # Get list of pages with links to fix
-    for page in pagelist:
-        brokenlinkpages = checkbrokenlinks(page, url, session)
-        for b in brokenlinkpages:
-            fixlist.add(b)
-    # Save a copy of the link fix list and the regex dictionary, in case the script crashes
-    with open(oldusername + "-" + newusername + "-fixlist.txt", "a") as savelist:
-        for f in fixlist:
-            line = f + "\n"
-            savelist.write(line)
-    with open(oldusername + "-" + newusername + "-regex.txt", "a") as savedict:
-        for r in regexdict:
-            line = str(r) + " : " + regexdict[r] + "\n"
-            savedict.write(line)
-    # Fix links
-    for page in fixlist:
-        updatelinks(page, regexdict, edittoken, url, session)
-elif jobid == 3:
-    # Userspace delete
-    username = input("User to RESIGN: ")
-    pagelist = getuserpages(username, url, session)
-    # Confirm the pages to be deleted
-    response = input(str(len(pagelist)) + ' pages to be deleted. Continue? (y/n) ')
-    if response != 'y':
-        logout(url, session)
-    # Save list of pages, in case mass undelete is needed
-    with open("RESIGN-" + username + ".txt", "a") as savelist:
-        for p in pagelist:
-            line = p + "\n"
-            savelist.write(line)
-    for page in pagelist:
-        deletepage(page, "[[PvX:RESIGN]]", edittoken, url, session)
-elif jobid == 4:
-    # Change absolute links to subpages into relative links
-    pass
-elif jobid == 5:
-    # Load files to continue from script crash
-    pass
-logout(url, session)
+if __name__ == "__main__":
+    main()
