@@ -406,11 +406,9 @@ def parsemoveentries(moveentries, url, session):
         if len(brokenlinkpages) == 0:
             print("Skipped " + title + ". No links found.")
             continue
-        answer = input("Add " + title + " to list of links to update? ")
-        if "y" in answer:
-            for p in brokenlinkpages:
-                titlelist.add(p)
-            movelist.append(title)
+        for p in brokenlinkpages:
+            titlelist.add(p)
+        movelist.append(title)
     return movelist, titlelist
 
 def finddestinations(movelist, url, session, username = None, timestamp = None, prompt = True):
