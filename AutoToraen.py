@@ -340,16 +340,8 @@ def checkbrokenlinks(page, url, session):
     return brokenlinkpages
 
 def updatelinks(page, regexdict, edittoken, url, session):
-    # Get page wikitext
-    params_listentry = {
-        'action':"parse",
-        'prop':"wikitext",
-        'page':page,
-        'format':"json"
-    }
-    
     # Make replacements
-    pagetext = apiget(url, params_listentry, session)['parse']['wikitext']['*']
+    pagetext = readpage(page, url, session)
     for a, b in regexdict.items():
         pagetext = re.sub(a, b, pagetext)
     status = editpage(page, pagetext, "Updating links of moved pages", edittoken, url, session)
@@ -357,6 +349,18 @@ def updatelinks(page, regexdict, edittoken, url, session):
         print("Links on '" + page + "' updated.")
     else:
         print("WARNING: Success message not received for '" + page + "'!")
+
+def readpage(page, url, session):
+    # Get page wikitext
+    params_readpage = {
+        'action':"parse",
+        'prop':"wikitext",
+        'page':page,
+        'format':"json"
+    }
+    
+    pagetext = apiget(url, params_readpage, session)['parse']['wikitext']['*']
+    return pagetext
 
 def deletepage(page, reason, edittoken, url, session):
     params_delete = {
