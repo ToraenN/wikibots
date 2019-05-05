@@ -343,9 +343,12 @@ def whatlinkshere(page, url, session):
     try:
         linkshere = apiget(url, params_linkshere, session)['query']['pages']["-1"]['linkshere'] # -1 will be provided as a placeholder for the page id for any missing page
     except KeyError:
-        pageid = apiget(url, params_linkshere, session)['query']['pages']
-        for id, data in pageid.items():
-            linkshere = data['linkshere']
+        try:
+            pageid = apiget(url, params_linkshere, session)['query']['pages']
+            for id, data in pageid.items():
+                linkshere = data['linkshere']
+        except:
+            pass #No links found
     for p in linkshere:
         linkpages.add(p['title'])
     return linkpages
