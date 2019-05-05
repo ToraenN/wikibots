@@ -347,7 +347,7 @@ def whatlinkshere(page, url, session):
             pageid = apiget(url, params_linkshere, session)['query']['pages']
             for id, data in pageid.items():
                 linkshere = data['linkshere']
-        except:
+        except KeyError:
             linkshere = [] #No links found
     for p in linkshere:
         linkpages.add(p['title'])
@@ -373,7 +373,10 @@ def readpage(page, url, session):
         'format':"json"
     }
     
-    pagetext = apiget(url, params_readpage, session)['parse']['wikitext']['*']
+    try:
+        pagetext = apiget(url, params_readpage, session)['parse']['wikitext']['*']
+    except KeyError:
+        pagetext = ""
     return pagetext
 
 def deletepage(page, reason, edittoken, url, session):
