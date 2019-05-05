@@ -348,7 +348,7 @@ def whatlinkshere(page, url, session):
             for id, data in pageid.items():
                 linkshere = data['linkshere']
         except:
-            pass #No links found
+            linkshere = [] #No links found
     for p in linkshere:
         linkpages.add(p['title'])
     return linkpages
