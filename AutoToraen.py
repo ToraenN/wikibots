@@ -273,6 +273,15 @@ def pageexist(page, url, session):
     except KeyError:
         return True #Page exists
 
+def isredirect(page, url, session):
+    # Check if the supplied page is a redirect
+    text = readpage(page, url, session)
+    if re.search("^#REDIRECT \[\[", text, re.I):
+        redirect = True
+    else:
+        redirect = False
+    return redirect
+
 def editpage(page, pagetext, reason, edittoken, url, session):
     params_editpage = {
         'action':"edit",
