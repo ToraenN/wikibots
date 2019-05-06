@@ -13,7 +13,7 @@ def main():
     session = requests.Session()
     edittoken = startup(url, session)
 
-    message = "What are you doing today?\n0: Updating links to moved pages.\n1: Reversing deletions.\n2: Moving userspace to new name.\n3: Resigning user.\n4: Update subpage links.\n5: Continue from crash.\nChoose the number of your job: "
+    message = "What are you doing today?\n0: Updating links to moved pages.\n1: Reversing deletions.\n2: Moving userspace to new name.\n3: Resigning user.\n4: Update subpage links.\n5: Load file.\nChoose the number of your job: "
     jobid = inputint(message, 6)
 
     if jobid == 0:
@@ -32,7 +32,7 @@ def main():
         # Change absolute links to subpages into relative links
         pass
     elif jobid == 5:
-        # Load files to continue from script crash
+        # Load files to execute a job
         pass
     logout(url, session)
 
@@ -157,13 +157,28 @@ def resign(url, edittoken, session):
 
 def apiget(url, parameters, session):
     apicall = session.get(url=url, params=parameters)
+    statuscheck(apicall)
     result = apicall.json()
     return result
 
 def apipost(url, parameters, session):
     apicall = session.post(url=url, data=parameters)
+    statuscheck(apicall)
     result = apicall.json()
     return result
+
+def statuscheck(apicall):
+    while True:
+        if apicall.status_code == requests.codes.ok:
+            break
+        else:
+            answer = input("Call to api failed: " + str(apicall.status_code) + "\nRetry " + str(apicall.url) + " (y/n)? ")
+            if "y" in answer:
+                continue
+            else:
+                print("Exiting script.")
+                raise SystemExit()
+    return
 
 def startup(url, session):
     # Using the main account for login is not supported. Obtain credentials via Special:BotPasswords
