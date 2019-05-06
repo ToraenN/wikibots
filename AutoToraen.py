@@ -12,29 +12,29 @@ def main():
     url = "https://gwpvx.gamepedia.com/api.php"
     session = requests.Session()
     edittoken = startup(url, session)
-
-    message = "What are you doing today?\n0: Updating links to moved pages.\n1: Reversing deletions.\n2: Moving userspace to new name.\n3: Resigning user.\n4: Update subpage links.\n5: Load file.\nChoose the number of your job: "
-    jobid = inputint(message, 6)
-
-    if jobid == 0:
-        # Link fixing
-        mplf(url, edittoken, session)
-    elif jobid == 1:
-        # Reverse deletions
-        oops(url, edittoken, session)
-    elif jobid == 2:
-        # Userspace move
-        sweep(url, edittoken, session)
-    elif jobid == 3:
-        # Userspace delete
-        resign(url, edittoken, session)
-    elif jobid == 4:
-        # Change absolute links to subpages into relative links
-        pass
-    elif jobid == 5:
-        # Load files to execute a job
-        pass
-    logout(url, session)
+    while True:
+        message = "\nWhat are you doing today?\n0: Updating links to moved pages.\n1: Reversing deletions.\n2: Moving userspace to new name.\n3: Resigning user.\n4: Update subpage links.\n5: Load file.\n6: Nevermind\nChoose the number of your job: "
+        jobid = inputint(message, 7)
+        if jobid == 0:
+            # Link fixing
+            mplf(url, edittoken, session)
+        elif jobid == 1:
+            # Reverse deletions
+            oops(url, edittoken, session)
+        elif jobid == 2:
+            # Userspace move
+            sweep(url, edittoken, session)
+        elif jobid == 3:
+            # Userspace delete
+            resign(url, edittoken, session)
+        elif jobid == 4:
+            # Change absolute links to subpages into relative links
+            pass
+        elif jobid == 5:
+            # Load files to execute a job
+            pass
+        elif jobid == 6:
+            logout(url, session)
 
 def mplf(url, edittoken, session):
     message = "Would you like to:\n0: Enter moves manually?\n1: Check the move log?\n2: Listen for moves?\nChoose a number: "
@@ -468,9 +468,7 @@ def finddestinations(movelist, url, session, username = None, timestamp = None, 
             for item in appendlist:
                 if not item in movedlist:
                     movedlist.append(item)
-            
-            destexist = pageexist(movetarget, url, session)
-            if destexist:
+            if pageexist(movetarget, url, session):
                 destinations.add(movetarget)
         destinations = list(destinations)
         # Only display the existing destinations
@@ -482,18 +480,12 @@ def finddestinations(movelist, url, session, username = None, timestamp = None, 
             destination = destinations[inputint(destquery, len(destinations))]
         elif (len(destinations) > 1) and (prompt == False):
             print("Multiple destinations found for " + source + ". Skipping (use other mode).")
-            destination = ""
+            continue
         elif len(destinations) == 1:
             destination = destinations[0]
             print("Destination for '" + source + "' found: " + destination)
         else:
             print("No destination found for '" + source + "'.")
-            destination = ""
-        # Return to source input if destination is blank or doesn't exist
-        if destination == "":
-                continue
-        if not pageexist(destination, url, session):
-            print("That destination does not exist!")
             continue
 
         # Build the regexes for finding links
