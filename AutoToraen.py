@@ -369,8 +369,11 @@ def updatelinks(page, regexdict, edittoken, url, session):
     # Make replacements
     pagetext = readpage(page, url, session)
     for a, b in regexdict.items():
-        pagetext = re.sub(a, b, pagetext)
-    status = editpage(page, pagetext, "Updating links of moved pages", edittoken, url, session)
+        newpagetext = re.sub(a, b, pagetext)
+    if pagetext == newpagetext:
+        print("No changes made to " + page + ". Broken links not identified.") # Caused by templates/link formats the script does not yet account for
+        return
+    status = editpage(page, newpagetext, "Updating links of moved pages", edittoken, url, session)
     if status:
         print("Links on '" + page + "' updated.")
     else:
@@ -439,9 +442,16 @@ def parsemoveentries(moveentries, url, session):
         if len(brokenlinkpages) == 0:
             print("Skipped " + title + ". No links found.")
             continue
+        # Compile pages to be fixed
         for p in brokenlinkpages:
             titlelist.add(p)
         movelist.append(title)
+        linknumber = str(len(brokenlinkpages))
+        message = "Found " + linknumber + " page"
+        if linknumber != "1":
+            message += "s"
+        message += " with links to " + title + "."
+        print(message)
     return movelist, titlelist
 
 def finddestinations(movelist, url, session, username = None, timestamp = None, prompt = True):
