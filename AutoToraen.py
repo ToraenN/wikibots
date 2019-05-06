@@ -41,13 +41,15 @@ def main():
             raise SystemExit()
 
 def statuscheck(apicall):
-    while True:
-        if apicall.status_code == requests.codes.ok:
-            break
+    if apicall.status_code == requests.codes.ok:
+        return True
+    else:
+        print("Call to api failed: " + str(apicall.status_code) + "\nAttempted url: " + str(apicall.url))
+        answer = input("Reattempt (y/n)? ")
+        if "y" in answer:
+            return False
         else:
-            print("Call to api failed: " + str(apicall.status_code) + "\nAttempted url: " + str(apicall.url) + "\nExiting script.")
             raise SystemExit()
-    return
 
 def inputint(prompt, limit):
     answer = input(prompt)
@@ -224,14 +226,18 @@ class BotSession:
             self.deletepage(page, "[[PvX:RESIGN]]")
 
     def apiget(self, parameters):
-        apicall = self.session.get(url = self.url, params = parameters)
-        statuscheck(apicall)
+        while True:
+            apicall = self.session.get(url = self.url, params = parameters)
+            if statuscheck(apicall):
+                break
         result = apicall.json()
         return result
 
     def apipost(self, parameters):
-        apicall = self.session.post(url = self.url, data = parameters)
-        statuscheck(apicall)
+        while True:
+            apicall = self.session.post(url = self.url, data = parameters)
+            if statuscheck(apicall):
+                break
         result = apicall.json()
         return result
 
