@@ -50,10 +50,10 @@ def mplf(url, edittoken, session):
             if source == "":
                 break
             else:
-                if pageexist(source, url, session):
+                if pageexist(source, url, session) and not isredirect(source, url, session):
                     print(source + " still exists.")
                     continue
-                brokenlinkpages = checkbrokenlinks(source, url, session)
+                brokenlinkpages = whatlinkshere(source, url, session)
                 if len(brokenlinkpages) > 0:
                     for b in brokenlinkpages:
                         fixlist.add(b)
@@ -124,7 +124,7 @@ def sweep(url, edittoken, session):
         movepage(page, newpage, regexdict, edittoken, url, session)
     # Get list of pages with links to fix
     for page in pagelist:
-        brokenlinkpages = checkbrokenlinks(page, url, session)
+        brokenlinkpages = whatlinkshere(page, url, session)
         for b in brokenlinkpages:
             fixlist.add(b)
     # Save a copy of the link fix list and the regex dictionary, in case the script crashes
@@ -288,6 +288,15 @@ def pageexist(page, url, session):
     except KeyError:
         return True #Page exists
 
+def isredirect(page, url, session):
+    # Check if the supplied page is a redirect
+    text = readpage(page, url, session)
+    if re.search("^#REDIRECT \[\[", text, re.I):
+        redirect = True
+    else:
+        redirect = False
+    return redirect
+
 def editpage(page, pagetext, reason, edittoken, url, session):
     params_editpage = {
         'action':"edit",
@@ -336,8 +345,8 @@ def movepage(oldpage, newpage, regexdict, edittoken, url, session):
         print("'" + page + "' to '" + newpage + "':" + moveresult['error']['info'])
     return moveresult
 
-def checkbrokenlinks(page, url, session):
-    brokenlinkpages = set()
+def whatlinkshere(page, url, session):
+    linkpages = set()
     params_linkshere = {
         'action':"query",
         'prop':"linkshere",
@@ -347,24 +356,18 @@ def checkbrokenlinks(page, url, session):
     }
     
     try:
-        linkshere = apiget(url, params_linkshere, session)['query']['pages']["-1"]['linkshere'] # -1 will be provided as a placeholder for the page id for any missing page
-        for p in linkshere:
-            brokenlinkpages.add(p['title'])
+        pageid = apiget(url, params_linkshere, session)['query']['pages']
+        for id, data in pageid.items():
+            linkshere = data['linkshere']
     except KeyError:
-        pass # Page still exists or has no links
-    return brokenlinkpages
+        linkshere = [] #No links found
+    for p in linkshere:
+        linkpages.add(p['title'])
+    return linkpages
 
 def updatelinks(page, regexdict, edittoken, url, session):
-    # Get page wikitext
-    params_listentry = {
-        'action':"parse",
-        'prop':"wikitext",
-        'page':page,
-        'format':"json"
-    }
-    
     # Make replacements
-    pagetext = apiget(url, params_listentry, session)['parse']['wikitext']['*']
+    pagetext = readpage(page, url, session)
     for a, b in regexdict.items():
         pagetext = re.sub(a, b, pagetext)
     status = editpage(page, pagetext, "Updating links of moved pages", edittoken, url, session)
@@ -372,6 +375,21 @@ def updatelinks(page, regexdict, edittoken, url, session):
         print("Links on '" + page + "' updated.")
     else:
         print("WARNING: Success message not received for '" + page + "'!")
+
+def readpage(page, url, session):
+    # Get page wikitext
+    params_readpage = {
+        'action':"parse",
+        'prop':"wikitext",
+        'page':page,
+        'format':"json"
+    }
+    
+    try:
+        pagetext = apiget(url, params_readpage, session)['parse']['wikitext']['*']
+    except KeyError:
+        pagetext = ""
+    return pagetext
 
 def deletepage(page, reason, edittoken, url, session):
     params_delete = {
@@ -412,12 +430,12 @@ def parsemoveentries(moveentries, url, session):
     titlelist = set()
     for entry in moveentries:
         title = entry['title']
-        # Check if the page exists (so we can ignore redirects/recreated pages)
-        if pageexist(title, url, session):
+        # Check if the page exists (so we can ignore recreated pages)
+        if pageexist(title, url, session) and not isredirect(title, url, session):
             print("Skipped " + title + ". Page exists.")
             continue
         # Check if anything still links to title in the move log entry
-        brokenlinkpages = checkbrokenlinks(title, url, session)
+        brokenlinkpages = whatlinkshere(title, url, session)
         if len(brokenlinkpages) == 0:
             print("Skipped " + title + ". No links found.")
             continue
