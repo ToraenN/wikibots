@@ -118,30 +118,21 @@ class BotSession:
         subjobid = inputint(message, 3)
         if subjobid == 0:
             # Manual entry
-            movelist = set()
-            fixlist = set()
+            moveentries = []
+            index = 0
             while True:
+                index += 1
                 # Prompt user for the old name of the page
-                source = input("\nOld name: ")
+                source = input(str(index) + ":Old name: ")
                 # Break loop, and thus move to processing, if source is blank.
                 if source == "":
                     break
                 else:
-                    if self.pageexist(source) and not self.isredirect(source):
-                        print(source + " still exists.")
-                        continue
-                    brokenlinkpages = self.whatlinkshere(source)
-                    if len(brokenlinkpages) > 0:
-                        for b in brokenlinkpages:
-                            fixlist.add(b)
-                        movelist.add(source)
-                    else:
-                        print("'" + source + "' is not linked to.")
-                    print(len(fixlist), " pages currently to be updated.")
-
+                    moveentries.append({'title':source})
+            movelist, titlelist = self.parsemoveentries(moveentries)
             regexdict = self.finddestinations(movelist)
-            for f in fixlist:
-                self.updatelinks(f, regexdict)
+            for title in titlelist:
+                self.updatelinks(title, regexdict)
         if subjobid == 1:
             # Check move log from specific date forward
             timestamp = settimestamp('move log')
