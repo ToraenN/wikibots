@@ -355,7 +355,7 @@ class BotSession:
         try:
             print("'" + moveresult['move']['from'] + "' moved to '" + moveresult['move']['to'] + "'.")
             # Build the regex for finding links
-            regex = re.compile("\[+" + page.replace(" ", "[_ ]").replace(":", "\:[_ ]{0,1}") + "[_ ]{0,1}(?=[\]\|#])", re.I) # This covers most wikilinks
+            regex = re.compile("\[+" + oldpage.replace(" ", "[_ ]").replace(":", "\:[_ ]{0,1}") + "[_ ]{0,1}(?=[\]\|#])", re.I) # This covers most wikilinks
             
             # Build the replace string
             replace = "[[" + newpage
@@ -363,7 +363,7 @@ class BotSession:
             # Save to dictionary
             regexdict.update({regex:replace})
         except KeyError:
-            print("'" + page + "' to '" + newpage + "':" + moveresult['error']['info'])
+            print("'" + oldpage + "' to '" + newpage + "':" + moveresult['error']['info'])
         return moveresult
 
     def whatlinkshere(self, page):
@@ -389,9 +389,10 @@ class BotSession:
     def updatelinks(self, page, regexdict):
         # Make replacements
         pagetext = self.readpage(page)
+        newpagetext = pagetext
         for a, b in regexdict.items():
-            newpagetext = re.sub(a, b, pagetext)
-        if pagetext == newpagetext:
+            newpagetext = re.sub(a, b, newpagetext)
+        if newpagetext == pagetext:
             print("No changes made to " + page + ". Broken links not identified.") # Caused by templates/link formats the script does not yet account for
             return
         status = self.editpage(page, newpagetext, "Updating links of moved pages")
