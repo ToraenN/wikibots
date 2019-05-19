@@ -147,6 +147,12 @@ class BotSession:
         if subjobid == 2:
             # Check the move log for new moves periodically
             timestamp = refreshtimestamp()
+            waittime = inputint("How many minutes would you like to wait between checks? (1-60 minutes): ", 61)
+            if waittime < 1:
+                waittime = 60
+            else:
+                waittime *= 60
+            print("Press Ctrl+C to stop listening.")
             try:
                 while True:
                     moveentries = self.checklog('move', timestamp = timestamp)
@@ -158,7 +164,7 @@ class BotSession:
                     for title in titlelist:
                         self.updatelinks(title, regexdict)
                     timestamp = newtimestamp
-                    sleep(60)
+                    sleep(waittime)
             except KeyboardInterrupt:
                 pass
 
