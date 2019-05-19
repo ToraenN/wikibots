@@ -147,16 +147,20 @@ class BotSession:
         if subjobid == 2:
             # Check the move log for new moves periodically
             timestamp = refreshtimestamp()
-            while True:
-                moveentries = self.checklog('move', timestamp = timestamp)
-                if len(moveentries) == 0:
-                    print("No moves detected since " + timestamp + "!")
-                timestamp = refreshtimestamp()
-                movelist, titlelist = self.parsemoveentries(moveentries)
-                regexdict = self.finddestinations(movelist, timestamp = timestamp, prompt = False)
-                for title in titlelist:
-                    self.updatelinks(title, regexdict)
-                sleep(60)
+            try:
+                while True:
+                    moveentries = self.checklog('move', timestamp = timestamp)
+                    if len(moveentries) == 0:
+                        print("No moves detected since " + timestamp + "!")
+                    newtimestamp = refreshtimestamp()
+                    movelist, titlelist = self.parsemoveentries(moveentries)
+                    regexdict = self.finddestinations(movelist, timestamp = timestamp, prompt = False)
+                    for title in titlelist:
+                        self.updatelinks(title, regexdict)
+                    timestamp = newtimestamp
+                    sleep(60)
+            except KeyboardInterrupt:
+                pass
 
     def oops(self):
         timestamp = settimestamp('delete log')
