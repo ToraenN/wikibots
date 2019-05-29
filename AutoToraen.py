@@ -60,7 +60,7 @@ def inputint(prompt, limit):
     while (isinstance(answer, int) == False) or (int(answer) not in range(limit)):
         try:
             answer = int(input('Invalid entry, please enter an integer within range: '))
-        except:
+        except ValueError:
             pass
     return answer
 
