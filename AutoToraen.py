@@ -66,9 +66,10 @@ def inputint(prompt, limit):
 
 def regexbuild(source, destination):
     # Build the regexes for finding links
-    regexsource = source.replace("'", "(%27|')").replace(":", "(%3A|:)").replace(" ", "[_ ]").replace(":", "\:[_ ]{0,1}")
-    regex1 = re.compile("\[+" + regexsource + "[_ ]{0,1}(?=[\]\|#])", re.I) # This covers most wikilinks
-    regex2 = re.compile("\{+" + regexsource.replace("(%3A|:)", "\|") + "[_ ]{0,1}\}+", re.I) # This one is for the {{Build}} template used for the admin noticeboard/user talks
+    regexsource =  "\[+" + source.replace("'", "(%27|')").replace(":", "(%3A|:)").replace(" ", "[_ ]").replace(":", "\:[_ ]{0,1}") + "[_ ]{0,1}(?=[\]\|#])"
+    regexsource2 = "\{+" + source.replace("'", "(%27|')").replace(":", "\|").replace(" ", "[_ ]").replace(":", "\:[_ ]{0,1}") + "[_ ]{0,1}\}+"
+    regex1 = re.compile(regexsource, re.I) # This covers most wikilinks
+    regex2 = re.compile(regexsource2, re.I) # This one is for the {{Build}} template used for the admin noticeboard/user talks
     # Build the replace strings
     replace1 = "[[" + destination
     # If the destination is not another Build: namespace article, the {{Build}} template needs to be replaced with a link
