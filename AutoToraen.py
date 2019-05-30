@@ -64,6 +64,21 @@ def inputint(prompt, limit):
             pass
     return answer
 
+def regexbuild(source, destination):
+    # Build the regexes for finding links
+    regexsource = source.replace("'", "(%27|')").replace(":", "(%3A|:)").replace(" ", "[_ ]").replace(":", "\:[_ ]{0,1}")
+    regex1 = re.compile("\[+" + regexsource + "[_ ]{0,1}(?=[\]\|#])", re.I) # This covers most wikilinks
+    regex2 = re.compile("\{+" + regexsource.replace("(%3A|:)", "\|") + "[_ ]{0,1}\}+", re.I) # This one is for the {{Build}} template used for the admin noticeboard/user talks
+    # Build the replace strings
+    replace1 = "[[" + destination
+    # If the destination is not another Build: namespace article, the {{Build}} template needs to be replaced with a link
+    if re.search("^Build:", destination) != None:
+        replace2 = "{{" + destination.replace(":", "|") + "}}"
+    else:
+        replace2 = "[[" + destination + "]]"
+    regexes = {source:[regex1, replace1, regex2, replace2]}
+    return regexes
+
 def settimestamp(prompt):
     timestamp = str(inputint('Enter the time (UTC) to start searching the ' + prompt + ' from (YYYYMMDDHHMMSS): ', 100000000000000)).ljust(14, "0")
     return timestamp
@@ -364,14 +379,7 @@ class BotSession:
         
         try:
             print("'" + moveresult['move']['from'] + "' moved to '" + moveresult['move']['to'] + "'.")
-            # Build the regex for finding links
-            regex = re.compile("\[+" + oldpage.replace(" ", "[_ ]").replace(":", "\:[_ ]{0,1}") + "[_ ]{0,1}(?=[\]\|#])", re.I) # This covers most wikilinks
-            
-            # Build the replace string
-            replace = "[[" + newpage
-            
-            # Save to dictionary
-            regexdict.update({regex:replace})
+            regexdict.update(regexbuild(oldpage, newpage))
         except KeyError:
             print("'" + oldpage + "' to '" + newpage + "':" + moveresult['error']['info'])
         return moveresult
@@ -401,7 +409,12 @@ class BotSession:
         pagetext = self.readpage(page)
         newpagetext = pagetext
         for a, b in regexdict.items():
-            newpagetext = re.sub(a, b, newpagetext)
+            newpagetext = re.sub(b[0], b[1], newpagetext)
+            newpagetext = re.sub(b[2], b[3], newpagetext)
+            if page in a:
+                sublink = re.sub("^" + page, "", a)
+                regexsublink = re.compile("\[+" + sublink.replace("'", "(%27|')").replace(":", "(%3A|:)").replace(" ", "[_ ]").replace(":", "\:[_ ]{0,1}") + "[_ ]{0,1}(?=[\]\|#])", re.I)
+                newpagetext = re.sub(regexsublink, b[1] , newpagetext)
         if newpagetext == pagetext:
             print("No changes made to " + page + ". Broken links not identified.") # Caused by templates/link formats the script does not yet account for
             return
@@ -519,19 +532,7 @@ class BotSession:
             else:
                 print("No destination found for '" + source + "'.")
                 continue
-
-            # Build the regexes for finding links
-            regex1 = re.compile("\[+" + source.replace("'", "(%27|')").replace(":", "(%3A|:)").replace(" ", "[_ ]").replace(":", "\:[_ ]{0,1}") + "[_ ]{0,1}(?=[\]\|#])", re.I) # This covers most wikilinks
-            regex2 = re.compile("\{+" + source.replace("'", "(%27|')").replace(":", "(%3A|:)").replace(" ", "[_ ]").replace(":", "\|[_ ]{0,1}") + "[_ ]{0,1}\}+", re.I) # This one is for the {{Build}} template used for the admin noticeboard/user talks
-
-            # Build the replace strings
-            replace1 = "[[" + destination
-            # If the destination is not another Build: namespace article, the {{Build}} template needs to be replaced with a link
-            if re.search("^Build:", destination) != None:
-                replace2 = "{{" + destination.replace(":", "|") + "}}"
-            else:
-                replace2 = "[[" + destination + "]]"
-            regexdict.update({regex1:replace1, regex2:replace2})
+            regexdict.update(regexbuild(source, destination))
         return regexdict
 
     def logout(self):
