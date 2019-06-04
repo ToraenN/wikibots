@@ -18,4 +18,7 @@ Moves all of a userspaces subpages to a new name and updates links to them.
 # RESIGN
 Nukes a userspace as per a PvX:RESIGN request (leaving PvXwiki permanently, removing personal info)
 
+# Convert subpage links
+Converts all links to subpages on a given page to relative links or to absolute links.
+
 
