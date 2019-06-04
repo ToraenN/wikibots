@@ -11,7 +11,7 @@ from time import sleep
 def main():
     bot = BotSession()
     while True:
-        message = "\nWhat are you doing today?\n0: Updating links to moved pages.\n1: Reversing deletions.\n2: Moving userspace to new name.\n3: Resigning user.\n4: Updating subpage links.\n5: Loading file.\n6: Change account.\n7: Logout\nChoose the number of your job: "
+        message = "\nWhat are you doing today?\n0: Updating links to moved pages.\n1: Reversing deletions.\n2: Moving userspace to new name.\n3: Resigning user.\n4: Convert subpage links.\n5: Loading file.\n6: Change account.\n7: Logout\nChoose the number of your job: "
         jobid = inputint(message, 8)
         if jobid == 0:
             # Link fixing
@@ -26,8 +26,8 @@ def main():
             # Userspace delete
             bot.resign()
         elif jobid == 4:
-            # Change absolute links to subpages into relative links
-            print("Not yet implemented.")
+            # Change absolute links to subpages into relative links, or vice versa
+            bot.sublinker()
         elif jobid == 5:
             # Load files to execute a job
             print("Not yet implemented.")
@@ -250,6 +250,32 @@ class BotSession:
                 savelist.write(line)
         for page in pagelist:
             self.deletepage(page, "[[PvX:RESIGN]]")
+
+    def sublinker(self):
+        message = "Would you like to:\n0: Convert to relative links?\n1: Convert to absolute links?\nChoose a number: "
+        subjobid = inputint(message, 2)
+        basepage = input("Base page (including namespace): ")
+        if not self.pageexist(basepage):
+            print(basepage + " does not exist.")
+            return
+        pagetext = self.readpage(basepage)
+        if subjobid == 0:
+            reason = "Converting to relative links."
+            linkregex = re.compile("\[+" + basepage + "(?=/)")
+            replace = "[["
+        if subjobid == 1:
+            reason = "Converting to absolute links."
+            linkregex = re.compile("\[+/")
+            replace = "[[" + basepage + "/"
+        newtext = re.sub(linkregex, replace, pagetext)
+        if pagetext != newtext:
+            success = self.editpage(basepage, newtext, reason)
+            if success:
+                print("Links on " + basepage + " updated.")
+            else:
+                print("WARNING: edit to " + basepage + " not successful!")
+        else:
+            print("No edits to " + basepage + " need to be made.")
 
     def apiget(self, parameters):
         while True:
