@@ -7,7 +7,7 @@ So far, it can do the following things:
 Given a page name, the script tries to find the name it was moved to (following move chains as needed) and fixes all links to point to the new name. Comes in three flavors:
 * Manually enter pages
 * Crawl the move log from a specific time to the present
-* Check the move log every minute and act on any moves that occur.
+* Check the move log periodically and act on any moves that occur.
 
 # Reverse accidental deletions
 Crawls the delete log from a specific time to the present (and optionally restricted to a specific user's deletions) and prompts the script user to undelete pages.
