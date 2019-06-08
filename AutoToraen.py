@@ -9,10 +9,10 @@ from datetime import datetime, date, time
 from time import sleep
 
 def main():
-    bot = BotSession()
+    bot = BotSession("https://gwpvx.gamepedia.com/api.php")
     while True:
-        message = "\nWhat are you doing today?\n0: Updating links to moved pages.\n1: Reversing deletions.\n2: Moving userspace to new name.\n3: Resigning user.\n4: Convert subpage links.\n5: Loading file.\n6: Change account.\n7: Logout\nChoose the number of your job: "
-        jobid = inputint(message, 8)
+        message = "\nWhat are you doing today?\n0: Updating links to moved pages.\n1: Reversing deletions.\n2: Moving userspace to new name.\n3: Resigning user.\n4: Convert subpage links.\n5: Interwiki conversion.\n6: [[gw:]] to [[gww:]]\n7: Change account.\n8: Logout\nChoose the number of your job: "
+        jobid = inputint(message, 9)
         if jobid == 0:
             # Link fixing
             bot.mplf()
@@ -29,13 +29,16 @@ def main():
             # Change absolute links to subpages into relative links, or vice versa
             bot.sublinker()
         elif jobid == 5:
-            # Load files to execute a job
-            print("Not yet implemented.")
+            # Convert external links to interwiki links where possible
+            bot.interwiki()
         elif jobid == 6:
+            # Convert [[gw:]] links to [[gww:]] links
+            bot.gwtogww()
+        elif jobid == 7:
             # Change to a different account
             bot.logout()
             bot = BotSession()
-        elif jobid == 7:
+        elif jobid == 8:
             # Exit
             bot.logout()
             raise SystemExit()
@@ -90,46 +93,47 @@ def refreshtimestamp():
     return timestamp
 
 class BotSession:
-    def __init__(self):
-        self.url = "https://gwpvx.gamepedia.com/api.php"
+    def __init__(self, url, login = True):
+        self.url = url
         self.session = requests.Session()
-        # Using the main account for login is not supported. Obtain credentials via Special:BotPasswords
-        username = input("Bot username: ")
-        password = getpass("Bot password: ")
-        
-        # Retrieve login token first
-        params_tokens = {
-            'action':"query",
-            'meta':"tokens",
-            'type':"login",
-            'format':"json"
-        }
-        
-        logintoken = self.apiget(params_tokens)['query']['tokens']['logintoken']
-        
-        # Then we can login
-        params_login = {
-            'action':"login",
-            'lgname':username,
-            'lgpassword':password,
-            'lgtoken':logintoken,
-            'format':"json"
-        }
-        
-        loggedin = self.apipost(params_login)['login']['result']
-        print("Login " + loggedin + "!")
-        del logintoken, params_login, username, password
-        if loggedin != 'Success':
-            raise SystemExit()
-        
-        # Get an edit token
-        params_edittoken = {
-            'action':"query",
-            'meta':"tokens",
-            'format':"json"
-        }
-        
-        self.edittoken = self.apipost(params_edittoken)['query']['tokens']['csrftoken']
+        if login:
+            # Using the main account for login is not supported. Obtain credentials via Special:BotPasswords
+            username = input("Bot username: ")
+            password = getpass("Bot password: ")
+            
+            # Retrieve login token first
+            params_tokens = {
+                'action':"query",
+                'meta':"tokens",
+                'type':"login",
+                'format':"json"
+            }
+            
+            logintoken = self.apiget(params_tokens)['query']['tokens']['logintoken']
+            
+            # Then we can login
+            params_login = {
+                'action':"login",
+                'lgname':username,
+                'lgpassword':password,
+                'lgtoken':logintoken,
+                'format':"json"
+            }
+            
+            loggedin = self.apipost(params_login)['login']['result']
+            print("Login " + loggedin + "!")
+            del logintoken, params_login, username, password
+            if loggedin != 'Success':
+                raise SystemExit()
+            
+            # Get an edit token
+            params_edittoken = {
+                'action':"query",
+                'meta':"tokens",
+                'format':"json"
+            }
+            
+            self.edittoken = self.apipost(params_edittoken)['query']['tokens']['csrftoken']
     
     def mplf(self):
         message = "Would you like to:\n0: Enter moves manually?\n1: Check the move log?\n2: Listen for moves?\nChoose a number: "
@@ -277,6 +281,78 @@ class BotSession:
         else:
             print("No edits to " + basepage + " need to be made.")
 
+    def interwiki(self):
+        while True:
+            basepage = input("Base page or category: ")
+            if basepage == "":
+                break
+            if not self.pageexist(basepage):
+                print(basepage + " does not exist.")
+                continue
+            if re.match(r'Category:', basepage):
+                pagelist = self.getcategory(basepage)
+            else:
+                pagelist = [basepage]
+            for page in pagelist:
+                pagetext = self.readpage(page)
+                newtext = pagetext
+                regex = { # Links to an api.php or index.php using parameters are ignored.
+                    'gww:':re.compile('(\[https{0,1}://wiki\.guildwars\.com/wiki/)(?!api\.php)(?!index\.php\?.*?&.*?=).*?( .*?\])'),
+                    'gw:':re.compile('(\[https{0,1}://guildwiki\.gamepedia\.com/)(?!api\.php)(?!index\.php\?.*?&.*?=).*?( .*?\])'),
+                    '':re.compile('(\[https{0,1}://gwpvx\.gamepedia\.com/)(?!api\.php)(?!index\.php\?.*?&.*?=).*?( .*?\])'),
+                    'scw:':re.compile('(\[https{0,1}://wiki\.fbgmguild\.com/)(?!api\.php)(?!index\.php\?.*?&.*?=).*?( .*?\])')
+                }
+                for a, b in regex.items():
+                    search = True
+                    while search:
+                        search = re.search(b, newtext)
+                        if search:
+                            groupA = "[[" + a
+                            groupB = (search[2]).replace(" ", "|", 1).replace("]", "]]", 1)
+                            newtext = newtext.replace(search[1], groupA, 1).replace(search[2], groupB, 1)
+                if pagetext != newtext:
+                    success = self.editpage(page, newtext, "Converting external links to interwiki links.")
+                    if success:
+                        print("External links on " + page + " updated.")
+                    else:
+                        print("WARNING: edit to " + page + " not successful!")
+                else:
+                    print("No edits to " + page + " need to be made.")
+
+    def gwtogww(self):
+        gwwreader = BotSession("https://wiki.guildwars.com/api.php", login = False)
+        while True:
+            basepage = input("Base page or category: ")
+            if basepage == "":
+                break
+            if not self.pageexist(basepage):
+                print(basepage + " does not exist.")
+                continue
+            if re.match(r'Category:', basepage):
+                pagelist = self.getcategory(basepage)
+            else:
+                pagelist = [basepage]
+            regex = re.compile('\[+gw:(.*?)\|')
+            for page in pagelist:
+                pagetext = self.readpage(page)
+                newtext = pagetext
+                search = re.findall(regex, newtext)
+                search = set(search)
+                for link in search:
+                    if gwwreader.pageexist(link):
+                        swap = re.compile('\[+gw:' + link)
+                        newtext = re.sub(swap, '[[gww:' + link, newtext)
+                    else:
+                        print('Guildwiki page "' + link + '" has no counterpart on Guild Wars Wiki.')
+                if pagetext != newtext:
+                    success = self.editpage(page, newtext, "Swapping gw: interwiki links to gww:")
+                    if success:
+                        print("Guildwiki links on " + page + " changed to Guild Wars Wiki links.")
+                    else:
+                        print("WARNING: edit to " + page + " not successful!")
+                else:
+                    print("No edits to " + page + " need to be made.")
+
     def apiget(self, parameters):
         while True:
             apicall = self.session.get(url = self.url, params = parameters)
@@ -292,6 +368,35 @@ class BotSession:
                 break
         result = apicall.json()
         return result
+
+    def getcategory(self, category):
+        params_category = {
+            'action':"query",
+            'list':"categorymembers",
+            'cmlimit':"max",
+            'cmtitle':category,
+            'format':"json"
+        }
+        
+        pagelist = []
+        while True:
+            result = self.apiget(params_category)
+            catmembers = result['query']['categorymembers']
+            for c in catmembers:
+                pagelist.append(c['title'])
+            try:
+                continuestr = result['continue']['cmcontinue']
+                params_category = {
+                    'action':"query",
+                    'list':"categorymembers",
+                    'cmlimit':"max",
+                    'cmtitle':category,
+                    'cmcontinue':continuestr,
+                    'format':"json"
+                }
+            except:
+                break
+        return pagelist
 
     def getuserpages(self, username):
         # Retrieve all userspace subpages
