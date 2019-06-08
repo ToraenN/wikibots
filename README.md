@@ -21,4 +21,7 @@ Nukes a userspace as per a PvX:RESIGN request (leaving PvXwiki permanently, remo
 # Convert subpage links
 Converts all links to subpages on a given page to relative links or to absolute links.
 
+# Convert external links to interwiki
+For links to Guildwiki, Guild Wars Wiki and Speed Clear Wiki (as well as any 'external' links to other PvXwiki pages).
+
 

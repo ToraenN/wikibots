@@ -11,7 +11,7 @@ from time import sleep
 def main():
     bot = BotSession()
     while True:
-        message = "\nWhat are you doing today?\n0: Updating links to moved pages.\n1: Reversing deletions.\n2: Moving userspace to new name.\n3: Resigning user.\n4: Convert subpage links.\n5: Loading file.\n6: Change account.\n7: Logout\nChoose the number of your job: "
+        message = "\nWhat are you doing today?\n0: Updating links to moved pages.\n1: Reversing deletions.\n2: Moving userspace to new name.\n3: Resigning user.\n4: Convert subpage links.\n5: Interwiki conversion.\n6: Change account.\n7: Logout\nChoose the number of your job: "
         jobid = inputint(message, 8)
         if jobid == 0:
             # Link fixing
@@ -29,8 +29,8 @@ def main():
             # Change absolute links to subpages into relative links, or vice versa
             bot.sublinker()
         elif jobid == 5:
-            # Load files to execute a job
-            print("Not yet implemented.")
+            # Convert external links to interwiki links where possible
+            bot.interwiki()
         elif jobid == 6:
             # Change to a different account
             bot.logout()
@@ -272,6 +272,36 @@ class BotSession:
             success = self.editpage(basepage, newtext, reason)
             if success:
                 print("Links on " + basepage + " updated.")
+            else:
+                print("WARNING: edit to " + basepage + " not successful!")
+        else:
+            print("No edits to " + basepage + " need to be made.")
+
+    def interwiki(self):
+        basepage = input("Base page (including namespace): ")
+        if not self.pageexist(basepage):
+            print(basepage + " does not exist.")
+            return
+        pagetext = self.readpage(basepage)
+        newtext = pagetext
+        regex = {
+            'gww:':re.compile('(\[https{0,1}://wiki\.guildwars\.com/wiki/).*?( .*?\])'),
+            'gw:':re.compile('(\[https{0,1}://guildwiki\.gamepedia\.com/).*?( .*?\])'),
+            '':re.compile('(\[https{0,1}://gwpvx\.gamepedia\.com/).*?( .*?\])'),
+            'scw:':re.compile('(\[https{0,1}://wiki\.fbgmguild\.com/).*?( .*?\])')
+        }
+        for a, b in regex.items():
+            search = True
+            while search:
+                search = re.search(b, newtext)
+                if search:
+                    groupA = "[[" + a
+                    groupB = (search[2]).replace(" ", "|", 1).replace("]", "]]", 1)
+                    newtext = newtext.replace(search[1], groupA, 1).replace(search[2], groupB, 1)
+        if pagetext != newtext:
+            success = self.editpage(basepage, newtext, "Converting external links to interwiki links.")
+            if success:
+                print("External links on " + basepage + " updated.")
             else:
                 print("WARNING: edit to " + basepage + " not successful!")
         else:
