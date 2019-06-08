@@ -279,36 +279,41 @@ class BotSession:
 
     def interwiki(self):
         while True:
-            basepage = input("Base page (including namespace): ")
+            basepage = input("Base page or category: ")
             if basepage == "":
                 break
             if not self.pageexist(basepage):
                 print(basepage + " does not exist.")
                 continue
-            pagetext = self.readpage(basepage)
-            newtext = pagetext
-            regex = {
-                'gww:':re.compile('(\[https{0,1}://wiki\.guildwars\.com/wiki/).*?( .*?\])'),
-                'gw:':re.compile('(\[https{0,1}://guildwiki\.gamepedia\.com/).*?( .*?\])'),
-                '':re.compile('(\[https{0,1}://gwpvx\.gamepedia\.com/).*?( .*?\])'),
-                'scw:':re.compile('(\[https{0,1}://wiki\.fbgmguild\.com/).*?( .*?\])')
-            }
-            for a, b in regex.items():
-                search = True
-                while search:
-                    search = re.search(b, newtext)
-                    if search:
-                        groupA = "[[" + a
-                        groupB = (search[2]).replace(" ", "|", 1).replace("]", "]]", 1)
-                        newtext = newtext.replace(search[1], groupA, 1).replace(search[2], groupB, 1)
-            if pagetext != newtext:
-                success = self.editpage(basepage, newtext, "Converting external links to interwiki links.")
-                if success:
-                    print("External links on " + basepage + " updated.")
-                else:
-                    print("WARNING: edit to " + basepage + " not successful!")
+            if re.match(r'Category:', basepage):
+                pagelist = self.getcategory(basepage)
             else:
-                print("No edits to " + basepage + " need to be made.")
+                pagelist = [basepage]
+            for page in pagelist:
+                pagetext = self.readpage(page)
+                newtext = pagetext
+                regex = { # Links to an api.php or index.php using parameters are ignored.
+                    'gww:':re.compile('(\[https{0,1}://wiki\.guildwars\.com/wiki/)(?!api\.php)(?!index\.php\?.*?&.*?=).*?( .*?\])'),
+                    'gw:':re.compile('(\[https{0,1}://guildwiki\.gamepedia\.com/)(?!api\.php)(?!index\.php\?.*?&.*?=).*?( .*?\])'),
+                    '':re.compile('(\[https{0,1}://gwpvx\.gamepedia\.com/)(?!api\.php)(?!index\.php\?.*?&.*?=).*?( .*?\])'),
+                    'scw:':re.compile('(\[https{0,1}://wiki\.fbgmguild\.com/)(?!api\.php)(?!index\.php\?.*?&.*?=).*?( .*?\])')
+                }
+                for a, b in regex.items():
+                    search = True
+                    while search:
+                        search = re.search(b, newtext)
+                        if search:
+                            groupA = "[[" + a
+                            groupB = (search[2]).replace(" ", "|", 1).replace("]", "]]", 1)
+                            newtext = newtext.replace(search[1], groupA, 1).replace(search[2], groupB, 1)
+                if pagetext != newtext:
+                    success = self.editpage(page, newtext, "Converting external links to interwiki links.")
+                    if success:
+                        print("External links on " + page + " updated.")
+                    else:
+                        print("WARNING: edit to " + page + " not successful!")
+                else:
+                    print("No edits to " + page + " need to be made.")
 
     def apiget(self, parameters):
         while True:
@@ -325,6 +330,35 @@ class BotSession:
                 break
         result = apicall.json()
         return result
+
+    def getcategory(self, category):
+        params_category = {
+            'action':"query",
+            'list':"categorymembers",
+            'cmlimit':"max",
+            'cmtitle':category,
+            'format':"json"
+        }
+        
+        pagelist = []
+        while True:
+            result = self.apiget(params_category)
+            catmembers = result['query']['categorymembers']
+            for c in catmembers:
+                pagelist.append(c['title'])
+            try:
+                continuestr = result['continue']['cmcontinue']
+                params_category = {
+                    'action':"query",
+                    'list':"categorymembers",
+                    'cmlimit':"max",
+                    'cmtitle':category,
+                    'cmcontinue':continuestr,
+                    'format':"json"
+                }
+            except:
+                break
+        return pagelist
 
     def getuserpages(self, username):
         # Retrieve all userspace subpages
