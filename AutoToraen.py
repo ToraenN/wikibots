@@ -9,7 +9,7 @@ from datetime import datetime, date, time
 from time import sleep
 
 def main():
-    bot = BotSession("https://gwpvx.gamepedia.com/api.php")
+    bot = BotSession() # Change default url in BotSession.__init__()
     while True:
         message = "\nWhat are you doing today?\n0: Updating links to moved pages.\n1: Reversing deletions.\n2: Moving userspace to new name.\n3: Resigning user.\n4: Convert subpage links.\n5: Interwiki conversion.\n6: [[gw:]] to [[gww:]]\n7: Change account.\n8: Logout\nChoose the number of your job: "
         jobid = inputint(message, 9)
@@ -44,6 +44,7 @@ def main():
             raise SystemExit()
 
 def statuscheck(apicall):
+    '''Checks for an HTTP error response.'''
     if apicall.status_code == requests.codes.ok:
         return True
     else:
@@ -55,6 +56,7 @@ def statuscheck(apicall):
             raise SystemExit()
 
 def inputint(prompt, limit):
+    '''Used for any prompt that has you pick from a list.'''
     answer = input(prompt)
     try:
         answer = int(answer)
@@ -68,7 +70,7 @@ def inputint(prompt, limit):
     return answer
 
 def regexbuild(source, destination):
-    # Build the regexes for finding links
+    '''Build the regexes for finding links/templates to update.'''
     regexsource =  "\[+" + source.replace("'", "(%27|')").replace(":", "(%3A|:)").replace(" ", "[_ ]").replace(":", "\:[_ ]{0,1}") + "[_ ]{0,1}(?=[\]\|#])"
     regexsource2 = "\{+" + source.replace("'", "(%27|')").replace(":", "\|").replace(" ", "[_ ]").replace(":", "\:[_ ]{0,1}") + "[_ ]{0,1}\}+"
     regex1 = re.compile(regexsource, re.I) # This covers most wikilinks
@@ -84,16 +86,19 @@ def regexbuild(source, destination):
     return regexes
 
 def settimestamp(prompt):
+    '''Prompts user for a timestamp, padded for use with mediawiki api.'''
     timestamp = str(inputint('Enter the time (UTC) to start searching the ' + prompt + ' from (YYYYMMDDHHMMSS): ', 100000000000000)).ljust(14, "0")
     return timestamp
 
 def refreshtimestamp():
+    '''Returns the current time, padded for use with mediawiki api.'''
     timestamp = str(datetime.utcnow()).replace("-","").replace(" ","").replace(":","")
     timestamp = (timestamp.split("."))[0]
     return timestamp
 
 class BotSession:
-    def __init__(self, url, login = True):
+    '''All functions that require the session's variables are methods of this class.'''
+    def __init__(self, url = "https://gwpvx.gamepedia.com/api.php", login = True):
         self.url = url
         self.session = requests.Session()
         if login:
@@ -124,18 +129,19 @@ class BotSession:
             print("Login " + loggedin + "!")
             del logintoken, params_login, username, password
             if loggedin != 'Success':
-                raise SystemExit()
+                print("NOT LOGGED IN: Depending on wiki settings edits may not occur.")
             
-            # Get an edit token
-            params_edittoken = {
-                'action':"query",
-                'meta':"tokens",
-                'format':"json"
-            }
-            
-            self.edittoken = self.apipost(params_edittoken)['query']['tokens']['csrftoken']
+        # Get an edit token
+        params_edittoken = {
+            'action':"query",
+            'meta':"tokens",
+            'format':"json"
+        }
+        
+        self.edittoken = self.apipost(params_edittoken)['query']['tokens']['csrftoken']
     
     def mplf(self):
+        '''Update links to moved pages.'''
         message = "Would you like to:\n0: Enter moves manually?\n1: Check the move log?\n2: Listen for moves?\nChoose a number: "
         subjobid = inputint(message, 3)
         if subjobid == 0:
@@ -189,6 +195,7 @@ class BotSession:
                 pass
 
     def oops(self):
+        '''Undo deletions.'''
         timestamp = settimestamp('delete log')
         username = input('Limit to user: ')
         deletelog = self.checklog('delete', username = username, timestamp = timestamp)
@@ -209,6 +216,7 @@ class BotSession:
                 break
 
     def sweep(self):
+        '''Moves all pages in one userspace to another.'''
         regexdict = dict()
         fixlist = set()
         # Prompt user for the old & new usernames
@@ -241,6 +249,7 @@ class BotSession:
             self.updatelinks(page, regexdict)
 
     def resign(self):
+        '''Deletes all pages in a given userspace.'''
         username = input("User to RESIGN: ")
         pagelist = self.getuserpages(username)
         # Confirm the pages to be deleted
@@ -256,6 +265,7 @@ class BotSession:
             self.deletepage(page, "[[PvX:RESIGN]]")
 
     def sublinker(self):
+        '''Convert subpage links (either direction).'''
         message = "Would you like to:\n0: Convert to relative links?\n1: Convert to absolute links?\nChoose a number: "
         subjobid = inputint(message, 2)
         basepage = input("Base page (including namespace): ")
@@ -282,6 +292,7 @@ class BotSession:
             print("No edits to " + basepage + " need to be made.")
 
     def interwiki(self):
+        '''Convert external links to interwiki links.'''
         while True:
             basepage = input("Base page or category: ")
             if basepage == "":
@@ -302,7 +313,7 @@ class BotSession:
                     '':re.compile('(\[https{0,1}://gwpvx\.gamepedia\.com/)(?!api\.php)(?!index\.php\?.*?&.*?=).*?( .*?\])'),
                     'scw:':re.compile('(\[https{0,1}://wiki\.fbgmguild\.com/)(?!api\.php)(?!index\.php\?.*?&.*?=).*?( .*?\])')
                 }
-                for a, b in regex.items():
+                for a, b in regex.items(): #'a' is the prefix to use for the interwiki link (or blank for internal link), 'b' is the regex that finds the associated external links
                     search = True
                     while search:
                         search = re.search(b, newtext)
@@ -320,7 +331,9 @@ class BotSession:
                     print("No edits to " + page + " need to be made.")
 
     def gwtogww(self):
-        gwwreader = BotSession("https://wiki.guildwars.com/api.php", login = False)
+        '''Convert gw: to gww:'''
+        gwwreader = BotSession("https://wiki.guildwars.com/api.php", login = False) # Creates a secondary read-only session for querying GWW api
+        existref = dict() # Remember which GWW pages have been checked for existence
         while True:
             basepage = input("Base page or category: ")
             if basepage == "":
@@ -332,15 +345,27 @@ class BotSession:
                 pagelist = self.getcategory(basepage)
             else:
                 pagelist = [basepage]
-            regex = re.compile('\[+gw:(.*?)\|')
+            regex = re.compile('\[+[Gg][Ww]:(.*?)\|')
             for page in pagelist:
                 pagetext = self.readpage(page)
                 newtext = pagetext
                 search = re.findall(regex, newtext)
                 search = set(search)
                 for link in search:
-                    if gwwreader.pageexist(link):
-                        swap = re.compile('\[+gw:' + link)
+                    try: # Check the dictionary first
+                        if existref[link]:
+                            linkexist = True
+                        else:
+                            linkexist = False
+                    except KeyError: # Only check GWW if the page isn't in the dictionary yet
+                        if gwwreader.pageexist(link):
+                            existref.update({link:True})
+                            linkexist = True
+                        else:
+                            existref.update({link:False})
+                            linkexist = False
+                    if linkexist:
+                        swap = re.compile('\[+[Gg][Ww]:' + link)
                         newtext = re.sub(swap, '[[gww:' + link, newtext)
                     else:
                         print('Guildwiki page "' + link + '" has no counterpart on Guild Wars Wiki.')
@@ -354,6 +379,7 @@ class BotSession:
                     print("No edits to " + page + " need to be made.")
 
     def apiget(self, parameters):
+        '''All GET requests go through this method.'''
         while True:
             apicall = self.session.get(url = self.url, params = parameters)
             if statuscheck(apicall):
@@ -362,6 +388,7 @@ class BotSession:
         return result
 
     def apipost(self, parameters):
+        '''All POST requests go through this method.'''
         while True:
             apicall = self.session.post(url = self.url, data = parameters)
             if statuscheck(apicall):
@@ -370,6 +397,7 @@ class BotSession:
         return result
 
     def getcategory(self, category):
+        '''Retrieve all members of a category.'''
         params_category = {
             'action':"query",
             'list':"categorymembers",
@@ -399,7 +427,7 @@ class BotSession:
         return pagelist
 
     def getuserpages(self, username):
-        # Retrieve all userspace subpages
+        '''Retrieve all userspace subpages'''
         params_userpages = {
             'action':"query",
             'list':"allpages",
@@ -429,6 +457,7 @@ class BotSession:
         return pagelist
 
     def checklog(self, action, title = None, username = None, timestamp = None):
+        '''Read a given log.'''
         params_logcheck = {
             'action':"query",
             'list':"logevents",
@@ -453,6 +482,7 @@ class BotSession:
         return loglist
 
     def pageexist(self, page):
+        '''Check if a page exists.'''
         params_existcheck = {
             'action':"query",
             'titles':page,
@@ -467,7 +497,7 @@ class BotSession:
             return True #Page exists
 
     def isredirect(self, page):
-        # Check if the supplied page is a redirect
+        '''Check if the supplied page is a redirect.'''
         text = self.readpage(page)
         if re.search("^#REDIRECT \[\[", text, re.I):
             redirect = True
@@ -476,6 +506,7 @@ class BotSession:
         return redirect
 
     def editpage(self, page, pagetext, reason):
+        '''Commit an edit to a page.'''
         params_editpage = {
             'action':"edit",
             'title':page,
@@ -497,6 +528,7 @@ class BotSession:
             return False
 
     def movepage(self, oldpage, newpage, regexdict):
+        '''Move a page to a new title.'''
         params_move = {
             'action':"move",
             'from':oldpage,
@@ -517,6 +549,7 @@ class BotSession:
         return moveresult
 
     def whatlinkshere(self, page):
+        '''Return all pages that link to a given page.'''
         linkpages = set()
         params_linkshere = {
             'action':"query",
@@ -537,7 +570,7 @@ class BotSession:
         return linkpages
 
     def updatelinks(self, page, regexdict):
-        # Make replacements
+        '''Update links of moved pages.'''
         pagetext = self.readpage(page)
         newpagetext = pagetext
         for a, b in regexdict.items():
@@ -557,7 +590,7 @@ class BotSession:
             print("WARNING: Success message not received for '" + page + "'!")
 
     def readpage(self, page):
-        # Get page wikitext
+        '''Get page wikitext.'''
         params_readpage = {
             'action':"parse",
             'prop':"wikitext",
@@ -572,6 +605,7 @@ class BotSession:
         return pagetext
 
     def deletepage(self, page, reason):
+        '''Delete a page (all revisions).'''
         params_delete = {
             'action':"delete",
             'title':page,
@@ -589,6 +623,7 @@ class BotSession:
         return result
 
     def restorepage(self, page, reason):
+        '''Restore a deleted page (all revisions).'''
         params_restore = {
             'action':"undelete",
             'title':title,
@@ -606,6 +641,7 @@ class BotSession:
         return result
 
     def parsemoveentries(self, moveentries):
+        '''Determine which move entries require links to be updated.'''
         movelist = []
         titlelist = set()
         for entry in moveentries:
@@ -632,6 +668,7 @@ class BotSession:
         return movelist, titlelist
 
     def finddestinations(self, movelist, username = None, timestamp = None, prompt = True):
+        '''Determine the new destinations for links to be updated.'''
         regexdict = dict()
         for source in movelist:
             # Check move log for destination
@@ -668,6 +705,7 @@ class BotSession:
         return regexdict
 
     def logout(self):
+        '''End the session.'''
         self.apipost({'action':"logout",'format':"json"})
         print("Logged out.")
 
