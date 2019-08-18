@@ -11,8 +11,8 @@ from time import sleep
 def main():
     bot = BotSession() # Change default url in BotSession.__init__()
     while True:
-        message = "\nWhat are you doing today?\n0: Updating links to moved pages.\n1: Reversing deletions.\n2: Moving userspace to new name.\n3: Resigning user.\n4: Convert subpage links.\n5: Interwiki conversion.\n6: [[gw:]] to [[gww:]]\n7: Change account.\n8: Logout\nChoose the number of your job: "
-        jobid = inputint(message, 9)
+        message = "\nWhat are you doing today?\n0: Updating links to moved pages.\n1: Reversing deletions.\n2: Moving userspace to new name.\n3: Resigning user.\n4: Convert subpage links.\n5: Interwiki conversion.\n6: [[gw:]] to [[gww:]]\n7: Find and replace.\n8: Change account.\n9: Logout\nChoose the number of your job: "
+        jobid = inputint(message, 10)
         if jobid == 0:
             # Link fixing
             bot.mplf()
@@ -35,10 +35,13 @@ def main():
             # Convert [[gw:]] links to [[gww:]] links
             bot.gwtogww()
         elif jobid == 7:
+            # Perform find/replace operations
+            bot.typo()
+        elif jobid == 8:
             # Change to a different account
             bot.logout()
             bot = BotSession()
-        elif jobid == 8:
+        elif jobid == 9:
             # Exit
             bot.logout()
             raise SystemExit()
@@ -335,16 +338,9 @@ class BotSession:
         gwwreader = BotSession("https://wiki.guildwars.com/api.php", login = False) # Creates a secondary read-only session for querying GWW api
         existref = dict() # Remember which GWW pages have been checked for existence
         while True:
-            basepage = input("Base page or category: ")
-            if basepage == "":
+            pagelist = self.makepagelist()
+            if len(pagelist) == 0:
                 break
-            if not self.pageexist(basepage):
-                print(basepage + " does not exist.")
-                continue
-            if re.match(r'Category:', basepage):
-                pagelist = self.getcategory(basepage)
-            else:
-                pagelist = [basepage]
             regex = re.compile('\[+[Gg][Ww]:(.*?)\|')
             for page in pagelist:
                 pagetext = self.readpage(page)
@@ -378,6 +374,41 @@ class BotSession:
                 else:
                     print("No edits to " + page + " need to be made.")
 
+    def typo(self):
+        '''Performs find/replace operations on page or category.'''
+        mode = inputint("\n0:Simple\n1:Regex\nChoose a search mode: ",2)
+        frpairs = dict()
+        if mode == 0:
+            index = 0
+            while True:
+                index += 1
+                find = input("Wikitext to find " + str(index) + ": ")
+                if find != "":
+                    replace = input("Replace with: ")
+                    frpairs.update({find:replace})
+                    print(frpairs)
+                else:
+                    break
+        elif mode == 1:
+            print("Not yet implemented.")
+        while True:
+            pagelist = self.makepagelist()
+            if len(pagelist) == 0:
+                break
+            for page in pagelist:
+                oldtext = self.readpage(page)
+                newtext = oldtext
+                for find, replace in frpairs.items():
+                    newtext = newtext.replace(find, replace)
+                if oldtext != newtext:
+                    success = self.editpage(page, newtext, "Bot replacement.")
+                    if success:
+                        print(page + " updated.")
+                    else:
+                        print("WARNING: edit to " + page + " not successful!")
+                else:
+                    print("No edits to " + page + " need to be made.")
+
     def apiget(self, parameters):
         '''All GET requests go through this method.'''
         while True:
@@ -395,6 +426,20 @@ class BotSession:
                 break
         result = apicall.json()
         return result
+
+    def makepagelist(self, prompt = "Base page or category: "):
+        '''Interprets user input as either a single page or a category to get pages from.'''
+        pagelist = []
+        basepage = input(prompt)
+        if basepage == "":
+            return pagelist
+        if not self.pageexist(basepage):
+            print(basepage + " does not exist.")
+        if re.match(r'Category:', basepage):
+            pagelist = self.getcategory(basepage)
+        else:
+            pagelist.append(basepage)
+        return pagelist
 
     def getcategory(self, category):
         '''Retrieve all members of a category.'''
