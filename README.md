@@ -27,4 +27,7 @@ For links to Guildwiki, Guild Wars Wiki and Speed Clear Wiki (as well as any 'ex
 # Convert gw: interwiki links to gww:
 Checks that page exists on GWW before converting the link.
 
+# Find and replace
+Does what it says. Accepts simple string substitutions (regex planned) and can operate on individual pages or categories.
+
 
