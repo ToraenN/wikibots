@@ -376,38 +376,48 @@ class BotSession:
 
     def typo(self):
         '''Performs find/replace operations on page or category.'''
-        mode = inputint("\n0:Simple\n1:Regex\nChoose a search mode: ",2)
+        summary = input("Edit summary for all changes: ")
+        if summary == "":
+            summary = "Bot replacement."
+        mode = inputint("\n0:Simple\n1:Regular expressions\nChoose a search mode: ",2)
+        print("")
         frpairs = dict()
-        if mode == 0:
-            index = 0
-            while True:
-                index += 1
+        index = 0
+        while True:
+            index += 1
+            if mode == 0:
                 find = input("Wikitext to find " + str(index) + ": ")
-                if find != "":
-                    replace = input("Replace with: ")
-                    frpairs.update({find:replace})
-                    print(frpairs)
-                else:
-                    break
-        elif mode == 1:
-            print("Not yet implemented.")
+            elif mode == 1:
+                find = input("Regular expression " + str(index) + ": ")
+            if find != "":
+                replace = input("Replace with: ")
+                frpairs.update({find:replace})
+            else:
+                break
+        print("")
         while True:
             pagelist = self.makepagelist()
             if len(pagelist) == 0:
                 break
             for page in pagelist:
-                oldtext = self.readpage(page)
-                newtext = oldtext
-                for find, replace in frpairs.items():
-                    newtext = newtext.replace(find, replace)
-                if oldtext != newtext:
-                    success = self.editpage(page, newtext, "Bot replacement.")
-                    if success:
-                        print(page + " updated.")
+                try:
+                    oldtext = self.readpage(page)
+                    newtext = oldtext
+                    for find, replace in frpairs.items():
+                        if mode == 0:
+                            newtext = newtext.replace(find, replace)
+                        elif mode == 1:
+                            newtext = re.sub(find, replace, newtext)
+                    if oldtext != newtext:
+                        success = self.editpage(page, newtext, summary)
+                        if success:
+                            print(page + " updated.")
+                        else:
+                            print("WARNING: edit to " + page + " not successful!")
                     else:
-                        print("WARNING: edit to " + page + " not successful!")
-                else:
-                    print("No edits to " + page + " need to be made.")
+                        print("No edits to " + page + " need to be made.")
+                except:
+                    print("Editing cancelled suddenly. Please verify the bot's edits on the wiki.")
 
     def apiget(self, parameters):
         '''All GET requests go through this method.'''
