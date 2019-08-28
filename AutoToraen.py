@@ -11,32 +11,32 @@ from time import sleep
 def main():
     bot = BotSession() # Change default url in BotSession.__init__()
     while True:
-        message = "\nWhat are you doing today?\n0: Updating links to moved pages.\n1: Reversing deletions.\n2: Moving userspace to new name.\n3: Resigning user.\n4: Convert subpage links.\n5: Interwiki conversion.\n6: [[gw:]] to [[gww:]]\n7: Find and replace.\n8: Change account.\n9: Logout\nChoose the number of your job: "
+        message = "\nWhat are you doing today?\n0: Find and replace.\n1: Updating links to moved pages.\n2: Convert subpage links.\n3: Interwiki conversion.\n4: [[gw:]] to [[gww:]]\n5: Reversing deletions.\n6: Moving userspace to new name.\n7: Resigning user.\n8: Change account.\n9: Logout\nChoose the number of your job: "
         jobid = inputint(message, 10)
         if jobid == 0:
-            # Link fixing
-            bot.mplf()
-        elif jobid == 1:
-            # Reverse deletions
-            bot.oops()
-        elif jobid == 2:
-            # Userspace move
-            bot.sweep()
-        elif jobid == 3:
-            # Userspace delete
-            bot.resign()
-        elif jobid == 4:
-            # Change absolute links to subpages into relative links, or vice versa
-            bot.sublinker()
-        elif jobid == 5:
-            # Convert external links to interwiki links where possible
-            bot.interwiki()
-        elif jobid == 6:
-            # Convert [[gw:]] links to [[gww:]] links
-            bot.gwtogww()
-        elif jobid == 7:
             # Perform find/replace operations
             bot.typo()
+        elif jobid == 1:
+            # Link fixing
+            bot.mplf()
+        elif jobid == 2:
+            # Change absolute links to subpages into relative links, or vice versa
+            bot.sublinker()
+        elif jobid == 3:
+            # Convert external links to interwiki links where possible
+            bot.interwiki()
+        elif jobid == 4:
+            # Convert [[gw:]] links to [[gww:]] links
+            bot.gwtogww()
+        elif jobid == 5:
+            # Reverse deletions
+            bot.oops()
+        elif jobid == 6:
+            # Userspace move
+            bot.sweep()
+        elif jobid == 7:
+            # Userspace delete
+            bot.resign()
         elif jobid == 8:
             # Change to a different account
             bot.logout()
