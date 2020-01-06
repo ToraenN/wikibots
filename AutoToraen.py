@@ -737,7 +737,7 @@ class BotSession:
                 for item in appendlist:
                     if not item in movedlist:
                         movedlist.append(item)
-                if self.pageexist(movetarget):
+                if self.pageexist(movetarget) and not self.isredirect(movetarget):
                     destinations.add(movetarget)
             destinations = list(destinations)
             # Only display the existing destinations
