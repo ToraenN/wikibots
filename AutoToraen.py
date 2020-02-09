@@ -135,13 +135,13 @@ class BotSession:
                 print("NOT LOGGED IN: Depending on wiki settings edits may not occur.")
             
         # Get an edit token
-        params_edittoken = {
+        params_csrftoken = {
             'action':"query",
             'meta':"tokens",
             'format':"json"
         }
         
-        self.edittoken = self.apipost(params_edittoken)['query']['tokens']['csrftoken']
+        self.csrftoken = self.apipost(params_csrftoken)['query']['tokens']['csrftoken']
     
     def mplf(self):
         '''Update links to moved pages.'''
@@ -568,7 +568,7 @@ class BotSession:
             'bot':"true",
             'summary':reason,
             'text':pagetext,
-            'token':self.edittoken,
+            'token':self.csrftoken,
             'format':"json"
         }
         
@@ -591,7 +591,7 @@ class BotSession:
             'reason':"Username change",
             'noredirect':"yes",
             'format':"json",
-            'token':self.edittoken
+            'token':self.csrftoken
         }
         
         moveresult = self.apipost(params_move)
@@ -666,7 +666,7 @@ class BotSession:
             'title':page,
             'reason':reason,
             'format':"json",
-            'token':self.edittoken
+            'token':self.csrftoken
         }
         
         result = self.apipost(params_delete)
@@ -683,7 +683,7 @@ class BotSession:
             'action':"undelete",
             'title':title,
             'reason':reason,
-            'token':self.edittoken,
+            'token':self.csrftoken,
             'format':"json"
         }
         
@@ -761,7 +761,13 @@ class BotSession:
 
     def logout(self):
         '''End the session.'''
-        self.apipost({'action':"logout",'format':"json"})
+        params_logout = {
+            'action':"logout",
+            'token':self.csrftoken,
+            'format':"json"
+        }
+        
+        self.apipost(params_logout)
         print("Logged out.")
 
 if __name__ == "__main__":
