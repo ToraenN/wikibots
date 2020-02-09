@@ -11,7 +11,7 @@ from time import sleep
 def main():
     bot = BotSession() # Change default url in BotSession.__init__()
     while True:
-        message = "\nWhat are you doing today?\n0: Find and replace.\n1: Updating links to moved pages.\n2: Convert subpage links.\n3: Interwiki conversion.\n4: [[gw:]] to [[gww:]]\n5: Reversing deletions.\n6: Moving userspace to new name.\n7: Resigning user.\n8: Change account.\n9: Logout\nChoose the number of your job: "
+        message = "\nWhat would you like to do?\n0: Find and replace.\n1: Update links to moved pages.\n2: Convert subpage links.\n3: Convert external links to interwiki links.\n4: Swap gw/gww interwiki links.\n5: Reverse deletions.\n6: Move userspace to new name.\n7: Resign user.\n8: Change account.\n9: Logout\nChoose the number of your job: "
         jobid = inputint(message, 10)
         if jobid == 0:
             # Perform find/replace operations
@@ -26,8 +26,8 @@ def main():
             # Convert external links to interwiki links where possible
             bot.interwiki()
         elif jobid == 4:
-            # Convert [[gw:]] links to [[gww:]] links
-            bot.gwtogww()
+            # Convert [[gw:]] links to [[gww:]] links or vice versa
+            bot.wikiswap()
         elif jobid == 5:
             # Reverse deletions
             bot.oops()
@@ -333,15 +333,31 @@ class BotSession:
                 else:
                     print("No edits to " + page + " need to be made.")
 
-    def gwtogww(self):
-        '''Convert gw: to gww:'''
-        gwwreader = BotSession("https://wiki.guildwars.com/api.php", login = False) # Creates a secondary read-only session for querying GWW api
-        existref = dict() # Remember which GWW pages have been checked for existence
+    def wikiswap(self):
+        '''Convert gww: to gw: or vice versa'''
+        message = "\nDo you want to:\n0: Convert Guildwiki links to Guild Wars Wiki links?\n1: Convert Guild Wars Wiki links to Guildwiki links?\nChoose a number: "
+        subid = inputint(message, 2)
+        if subid == 0:
+            source = "Guildwiki"
+            target = "Guild Wars Wiki"
+            url = "https://wiki.guildwars.com/api.php"
+            regexprefix = '\[+[Gg][Ww]:'
+            replaceprefix = '[[gww:'
+        elif subid == 1:
+            source = "Guild Wars Wiki"
+            target = "Guildwiki"
+            url = "https://guildwiki.gamepedia.com/api.php"
+            regexprefix = '\[+[Gg][Ww][Ww]:'
+            replaceprefix = '[[gw:'
+        message = "\nConvert all possible links?\n0: Yes.\n1: Let me pick for each link.\nChoose a number: "
+        manual = inputint(message, 2)
+        wikireader = BotSession(url, login = False) # Create a secondary read-only session for querying target wiki's api
+        existref = dict() # Remember which GW pages have been checked for existence
         while True:
             pagelist = self.makepagelist()
             if len(pagelist) == 0:
                 break
-            regex = re.compile('\[+[Gg][Ww]:(.*?)\|')
+            regex = re.compile(regexprefix + '(.*?)\|')
             for page in pagelist:
                 pagetext = self.readpage(page)
                 newtext = pagetext
@@ -353,22 +369,26 @@ class BotSession:
                             linkexist = True
                         else:
                             linkexist = False
-                    except KeyError: # Only check GWW if the page isn't in the dictionary yet
-                        if gwwreader.pageexist(link):
+                    except KeyError: # Only check target wiki if the page isn't in the dictionary yet
+                        if wikireader.pageexist(link):
                             existref.update({link:True})
                             linkexist = True
                         else:
                             existref.update({link:False})
                             linkexist = False
                     if linkexist:
-                        swap = re.compile('\[+[Gg][Ww]:' + link)
-                        newtext = re.sub(swap, '[[gww:' + link, newtext)
+                        if manual:
+                            message = "Convert link to " + link + "? (type n to skip link) "
+                            if input(message) == "n":
+                                continue
+                        swap = re.compile(regexprefix + link)
+                        newtext = re.sub(swap, replaceprefix + link, newtext)
                     else:
-                        print('Guildwiki page "' + link + '" has no counterpart on Guild Wars Wiki.')
+                        print(source + ' page "' + link + '" has no counterpart on ' + target +'.')
                 if pagetext != newtext:
-                    success = self.editpage(page, newtext, "Swapping gw: interwiki links to gww:")
+                    success = self.editpage(page, newtext, "Swapping " + source + " interwiki links to " + target + ".")
                     if success:
-                        print("Guildwiki links on " + page + " changed to Guild Wars Wiki links.")
+                        print(source + " links on " + page + " changed to " + target + " links.")
                     else:
                         print("WARNING: edit to " + page + " not successful!")
                 else:
