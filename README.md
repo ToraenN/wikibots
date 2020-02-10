@@ -24,8 +24,8 @@ Converts all links to subpages on a given page to relative links or to absolute 
 # Convert external links to interwiki
 For links to Guildwiki, Guild Wars Wiki and Speed Clear Wiki (as well as any 'external' links to other PvXwiki pages).
 
-# Convert gw: interwiki links to gww:
-Checks that page exists on GWW before converting the link.
+# Convert interwiki links between Guildwiki and Guild Wars Wiki:
+Checks that page exists on GWW or GW before converting the link. You can choose either direction to convert and either all possible links or select whether each unique link is converted.
 
 # Find and replace
 Does what it says. Accepts simple string substitutions or regular expression matching and can operate on individual pages or categories. It is recommended to test your replacements on a single page before using it on an entire category.
