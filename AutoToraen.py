@@ -19,6 +19,7 @@ def main():
         jobs.append(("Convert subpage links.", bot.sublinker)) # Change absolute links to subpages into relative links, or vice versa
         jobs.append(("Convert external links to interwiki links.", bot.interwiki)) # Convert external links to interwiki links where possible
         jobs.append(("Swap gw/gww interwiki links.", bot.wikiswap)) # Convert [[gw:]] links to [[gww:]] links or vice versa
+        jobs.append(("Check accuracy of ratings.", bot.ratingcheck)) # Check the ratings of a build and update Real-Vetting tag if neccessary
         jobs.append(("Move userspace to new name.", bot.sweep)) # Userspace move
         jobs.append(("Resign user. (requires admin)", bot.resign)) # Userspace delete
         jobs.append(("Reverse deletions. (requires admin)", bot.oops)) # Reverse deletions
@@ -89,7 +90,7 @@ def refreshtimestamp():
 
 class BotSession:
     '''All functions that require the session's variables are methods of this class.'''
-    def __init__(self, url = "https://gwpvx.gamepedia.com/api.php", login = True):
+    def __init__(self, url = "https://gwpvx.gamepedia.com/api.php", login = True, edit = True):
         self.url = url
         self.session = requests.Session()
         if login:
@@ -126,13 +127,16 @@ class BotSession:
                 print("Login failed. Please ensure login details are correct.")
             
         # Get an edit token
-        params_csrftoken = {
-            'action':"query",
-            'meta':"tokens",
-            'format':"json"
-        }
-        
-        self.csrftoken = self.apipost(params_csrftoken)['query']['tokens']['csrftoken']
+        if edit:
+            params_csrftoken = {
+                'action':"query",
+                'meta':"tokens",
+                'format':"json"
+            }
+            
+            self.csrftoken = self.apipost(params_csrftoken)['query']['tokens']['csrftoken']
+        else:
+            self.csrftoken = ""
     
     def mplf(self):
         '''Update links to moved pages.'''
@@ -342,7 +346,7 @@ class BotSession:
             replaceprefix = '[[gw:'
         message = "\nConvert all possible links?\n0: Yes.\n1: Let me pick for each link.\nChoose a number: "
         manual = inputint(message, 2)
-        wikireader = BotSession(url, login = False) # Create a secondary read-only session for querying target wiki's api
+        wikireader = BotSession(url, login = False, edit = False) # Create a secondary read-only session for querying target wiki's api
         existref = dict() # Remember which GW pages have been checked for existence
         while True:
             pagelist = self.makepagelist()
@@ -429,6 +433,32 @@ class BotSession:
                         print("No edits to " + page + " need to be made.")
                 except:
                     print("Editing cancelled suddenly. Please verify the bot's edits on the wiki.")
+
+    def ratingcheck(self):
+        '''View the rating page of a build and find the overall rating. Does not work because botpassword credentials aren't valid outside of api calls.'''
+        votereader = BotSession("https://gwpvx.gamepedia.com/index.php", login = False, edit = False)
+        while True:
+            pagelist = self.makepagelist("Page or category: ")
+            if not pagelist:
+                break
+            for page in pagelist:
+                params_readratings = {
+                    'title':page,
+                    'action':"rate"
+                }
+            
+                response = votereader.session.get(url = votereader.url, params = params_readratings)
+                rawtext = response.text
+                ratefind = re.compile('Rating totals: .*?Overall.*?class="tdresult">(\d\.\d\d)<\/td><\/tr>', re.DOTALL)
+                errorfind = re.compile('You do not have permission to rate builds, for the following reason:')
+                rating = ratefind.search(rawtext)
+                error = errorfind.search(rawtext)
+                if rating:
+                    print("The rating of " + page + " is " + str(rating.group(1)))
+                elif error:
+                    print("Bot is not recognized as logged in.")
+                else:
+                    print("No rating found for " + page)
 
     def apiget(self, parameters):
         '''All GET requests go through this method.'''
