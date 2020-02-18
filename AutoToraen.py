@@ -11,40 +11,28 @@ from time import sleep
 def main():
     bot = BotSession() # Change default url in BotSession.__init__()
     while True:
-        message = "\nWhat would you like to do?\n0: Find and replace.\n1: Update links to moved pages.\n2: Convert subpage links.\n3: Convert external links to interwiki links.\n4: Swap gw/gww interwiki links.\n5: Reverse deletions.\n6: Move userspace to new name.\n7: Resign user.\n8: Change account.\n9: Logout\nChoose the number of your job: "
-        jobid = inputint(message, 10)
-        if jobid == 0:
-            # Perform find/replace operations
-            bot.typo()
-        elif jobid == 1:
-            # Link fixing
-            bot.mplf()
-        elif jobid == 2:
-            # Change absolute links to subpages into relative links, or vice versa
-            bot.sublinker()
-        elif jobid == 3:
-            # Convert external links to interwiki links where possible
-            bot.interwiki()
-        elif jobid == 4:
-            # Convert [[gw:]] links to [[gww:]] links or vice versa
-            bot.wikiswap()
-        elif jobid == 5:
-            # Reverse deletions
-            bot.oops()
-        elif jobid == 6:
-            # Userspace move
-            bot.sweep()
-        elif jobid == 7:
-            # Userspace delete
-            bot.resign()
-        elif jobid == 8:
-            # Change to a different account
-            bot.logout()
+        if bot.loggedin != "Success": # If we selected to change account or login failed, bring up login prompt again
             bot = BotSession()
-        elif jobid == 9:
-            # Exit
-            bot.logout()
-            raise SystemExit()
+        jobs = []
+        jobs.append(("Find and replace.", bot.typo)) # Perform find/replace operations
+        jobs.append(("Update links to moved pages.", bot.mplf)) # Link fixing
+        jobs.append(("Convert subpage links.", bot.sublinker)) # Change absolute links to subpages into relative links, or vice versa
+        jobs.append(("Convert external links to interwiki links.", bot.interwiki)) # Convert external links to interwiki links where possible
+        jobs.append(("Swap gw/gww interwiki links.", bot.wikiswap)) # Convert [[gw:]] links to [[gww:]] links or vice versa
+        jobs.append(("Move userspace to new name.", bot.sweep)) # Userspace move
+        jobs.append(("Resign user. (requires admin)", bot.resign)) # Userspace delete
+        jobs.append(("Reverse deletions. (requires admin)", bot.oops)) # Reverse deletions
+        jobs.append(("Change account.", bot.relog)) # Change to a different account
+        jobs.append(("Logout.", bot.exit)) # Exit script
+        message = "\nWhat would you like to do?"
+        index = 0
+        for job in jobs:
+            jobmessage = (jobs[index])[0]
+            message += "\n" + str(index) + ": " + jobmessage
+            index += 1
+        message += "\nChoose the number of your job: "
+        jobid = inputint(message, len(jobs))
+        ((jobs[jobid])[1])() # Run the selected job.
 
 def statuscheck(apicall):
     '''Checks for an HTTP error response.'''
@@ -107,6 +95,9 @@ class BotSession:
         if login:
             # Using the main account for login is not supported. Obtain credentials via Special:BotPasswords
             username = input("Bot username: ")
+            # Blank username exits script
+            if username == "":
+                raise SystemExit()
             password = getpass("Bot password: ")
             
             # Retrieve login token first
@@ -128,11 +119,11 @@ class BotSession:
                 'format':"json"
             }
             
-            loggedin = self.apipost(params_login)['login']['result']
-            print("Login " + loggedin + "!")
+            self.loggedin = self.apipost(params_login)['login']['result']
+            print("Login " + self.loggedin + "!")
             del logintoken, params_login, username, password
-            if loggedin != 'Success':
-                print("NOT LOGGED IN: Depending on wiki settings edits may not occur.")
+            if self.loggedin != 'Success':
+                print("Login failed. Please ensure login details are correct.")
             
         # Get an edit token
         params_csrftoken = {
@@ -789,6 +780,14 @@ class BotSession:
         
         self.apipost(params_logout)
         print("Logged out.")
+
+    def relog(self):
+        self.logout()
+        self.loggedin = False
+
+    def exit(self):
+        self.logout()
+        raise SystemExit()
 
 if __name__ == "__main__":
     main()
