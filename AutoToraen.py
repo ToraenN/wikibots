@@ -26,11 +26,9 @@ def main():
         jobs.append(("Change account.", bot.relog)) # Change to a different account
         jobs.append(("Logout.", bot.exit)) # Exit script
         message = "\nWhat would you like to do?"
-        index = 0
         for job in jobs:
-            jobmessage = (jobs[index])[0]
-            message += "\n" + str(index) + ": " + jobmessage
-            index += 1
+            jobmessage = job[0]
+            message += "\n" + str(jobs.index(job)) + ": " + jobmessage
         message += "\nChoose the number of your job: "
         jobid = inputint(message, len(jobs))
         ((jobs[jobid])[1])() # Run the selected job.
@@ -442,23 +440,63 @@ class BotSession:
             if not pagelist:
                 break
             for page in pagelist:
+                wikitext = self.readpage(page)
+                newtext = str(wikitext)
+                templaterating = False # Fixme: write function for determining rating in template
+                templatestatus = False # Fixme: ditto for status
+                if templaterating == "trial" or templaterating == "abandoned" or templaterating == "archived":
+                    continue # Skip builds that don't need evaluation
+                if templaterating == "testing":
+                    testingage = False # Fixme: write function for determining age in testing category
+                
                 params_readratings = {
                     'title':page,
                     'action':"rate"
                 }
             
                 response = votereader.session.get(url = votereader.url, params = params_readratings)
-                rawtext = response.text
-                ratefind = re.compile('Rating totals: .*?Overall.*?class="tdresult">(\d\.\d\d)<\/td><\/tr>', re.DOTALL)
-                errorfind = re.compile('You do not have permission to rate builds, for the following reason:')
-                rating = ratefind.search(rawtext)
-                error = errorfind.search(rawtext)
+                ratepage = response.text
+                ratefind = re.compile('Rating totals: (\d*?) votes.*?Overall.*?class="tdresult">(\d\.\d\d)<\/td><\/tr>', re.DOTALL)
+                ratestring = ratefind.search(ratepage)
+                if ratestring:
+                    ratecount = int(ratestring.group(1))
+                    rating = float(ratestring.group(2))
+                else: # No rating found or login is unrecognized.
+                    continue
+                return # The rest of this is psuedocode/untested and shouldn't run
+                
                 if rating:
-                    print("The rating of " + page + " is " + str(rating.group(1)))
-                elif error:
-                    print("Bot is not recognized as logged in.")
+                    print("There are " + str(ratecount) + " votes. The rating of " + page + " is " + str(rating))
                 else:
                     print("No rating found for " + page)
+                
+                if ratecount >= 5: # Handle as fully vetted build
+                    newtext = re.sub("\|status=provisional\|", "|", newtext)
+                    if rating >= 4.75:
+                        newtext = re.sub("\|rating=.?\|", "|rating=great|", newtext)
+                    elif rating >= 3.75:
+                        newtext = re.sub("\|rating=.?\|", "|rating=good|", newtext)
+                    else:
+                        if templaterating != "trash":
+                            newtext = re.sub("\|date=.*?\|", "|", wikitext)
+                            newtext = re.sub("\|rating=.?\|", "|rating=trash|~~~~~", newtext)
+                elif ratecount >= 2: # Handle as provisionally vetted build (unless meta)
+                    if templaterating == "testing":
+                        if testingage < "2 weeks": # Fixme: Relies on yet to be built function
+                            continue
+                    if not templatestatus: # If either status is defined, we won't overwrite it
+                        newtext = re.sub("\{+Real-Vetting\|", "{{Real-Vetting|status=provisional", newtext)
+                    if rating >= 4.75:
+                        newtext = re.sub("\|rating=.?\|", "|rating=great|", newtext)
+                    elif rating >= 3.75:
+                        newtext = re.sub("\|rating=.?\|", "|rating=good|", newtext)
+                    else:
+                        if templaterating != "trash":
+                            newtext = re.sub("\|date=.*?\|", "|", wikitext)
+                            newtext = re.sub("\|rating=.?\|", "|rating=trash|~~~~~", newtext)
+                else: # Revert to testing if rating has been erroneously applied
+                    newtext = re.sub("\|rating=.?\|", "|rating=testing|", newtext)
+                    newtext = re.sub("\|status=provisional\|", "|", newtext)
 
     def apiget(self, parameters):
         '''All GET requests go through this method.'''
