@@ -9,27 +9,30 @@ from datetime import datetime, date, time
 from time import sleep
 
 def main():
-    bot = BotSession() # Change default url in BotSession.__init__()
+    # Initial login
+    bot = BotSession()
+    # Build the job listing
+    jobs = []
+    jobs.append(("Find and replace.", bot.typo)) # Perform find/replace operations
+    jobs.append(("Update links to moved pages.", bot.mplf)) # Link fixing
+    jobs.append(("Convert subpage links.", bot.sublinker)) # Change absolute links to subpages into relative links, or vice versa
+    jobs.append(("Convert external links to interwiki links.", bot.interwiki)) # Convert external links to interwiki links where possible
+    jobs.append(("Swap gw/gww interwiki links.", bot.wikiswap)) # Convert [[gw:]] links to [[gww:]] links or vice versa
+    jobs.append(("Check accuracy of ratings.", bot.ratingcheck)) # Check the ratings of a build and update Real-Vetting tag if neccessary
+    jobs.append(("Move userspace to new name.", bot.sweep)) # Userspace move
+    jobs.append(("Resign user. (requires admin)", bot.resign)) # Userspace delete
+    jobs.append(("Reverse deletions. (requires admin)", bot.oops)) # Reverse deletions
+    jobs.append(("Change account.", bot.relog)) # Change to a different account
+    jobs.append(("Logout.", bot.exit)) # Exit script
+    message = "\nWhat would you like to do?"
+    message += "\nChoose the number of your job: "
+    for job in jobs:
+        jobmessage = job[0]
+        message += "\n" + str(jobs.index(job)) + ": " + jobmessage
+    # Prompt user for selection, loop so that we can do multiple things without having to re-launch
     while True:
-        if bot.loggedin != "Success": # If we selected to change account or login failed, bring up login prompt again
+        if bot.loggedin != "Success": # If we selected to change account or previous login failed, bring up login prompt again
             bot = BotSession()
-        jobs = []
-        jobs.append(("Find and replace.", bot.typo)) # Perform find/replace operations
-        jobs.append(("Update links to moved pages.", bot.mplf)) # Link fixing
-        jobs.append(("Convert subpage links.", bot.sublinker)) # Change absolute links to subpages into relative links, or vice versa
-        jobs.append(("Convert external links to interwiki links.", bot.interwiki)) # Convert external links to interwiki links where possible
-        jobs.append(("Swap gw/gww interwiki links.", bot.wikiswap)) # Convert [[gw:]] links to [[gww:]] links or vice versa
-        jobs.append(("Check accuracy of ratings.", bot.ratingcheck)) # Check the ratings of a build and update Real-Vetting tag if neccessary
-        jobs.append(("Move userspace to new name.", bot.sweep)) # Userspace move
-        jobs.append(("Resign user. (requires admin)", bot.resign)) # Userspace delete
-        jobs.append(("Reverse deletions. (requires admin)", bot.oops)) # Reverse deletions
-        jobs.append(("Change account.", bot.relog)) # Change to a different account
-        jobs.append(("Logout.", bot.exit)) # Exit script
-        message = "\nWhat would you like to do?"
-        for job in jobs:
-            jobmessage = job[0]
-            message += "\n" + str(jobs.index(job)) + ": " + jobmessage
-        message += "\nChoose the number of your job: "
         jobid = inputint(message, len(jobs))
         ((jobs[jobid])[1])() # Run the selected job.
 
