@@ -25,10 +25,10 @@ def main():
     jobs.append(("Change account.", bot.relog)) # Change to a different account
     jobs.append(("Logout.", bot.exit)) # Exit script
     message = "\nWhat would you like to do?"
-    message += "\nChoose the number of your job: "
     for job in jobs:
         jobmessage = job[0]
         message += "\n" + str(jobs.index(job)) + ": " + jobmessage
+    message += "\nChoose the number of your job: "
     # Prompt user for selection, loop so that we can do multiple things without having to re-launch
     while True:
         if bot.loggedin != "Success": # If we selected to change account or previous login failed, bring up login prompt again
@@ -436,7 +436,7 @@ class BotSession:
                     print("Editing cancelled suddenly. Please verify the bot's edits on the wiki.")
 
     def ratingcheck(self):
-        '''View the rating page of a build and find the overall rating. Does not work because botpassword credentials aren't valid outside of api calls.'''
+        '''View the rating page of a build and find the overall rating. Then update the displayed rating.'''
         votereader = BotSession("https://gwpvx.gamepedia.com/index.php", login = False, edit = False)
         while True:
             pagelist = self.makepagelist("Page or category: ")
