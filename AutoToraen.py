@@ -65,9 +65,11 @@ def inputint(prompt, limit):
 
 def regexbuild(source, destination):
     '''Build the regexes for finding links/templates to update.'''
+    parsedsource = source.replace(" ", "[_ ]").replace(":", "(?:%3A|:)[_ ]{0,1}").replace("'", "(?:%27|')") # People sure are creative in linking in weird ways
+    templatesource = source.replace(":", "\|").replace("'", "(%27|')").replace(" ", "[_ ]") # For {{Build}}
     if destination:
-        regexsource =  "\[\[" + source.replace(" ", "[_ ]").replace(":", "(%3A|:)[_ ]{0,1}").replace("'", "(%27|')") + "[_ ]{0,1}(?=[\]\|#])"
-        regexsource2 = "\{\{" + source.replace("'", "(%27|')").replace(":", "\|").replace(" ", "[_ ]") + "[_ ]{0,1}\}\}"
+        regexsource =  "\[\[" + parsedsource + "[_ ]{0,1}(?=[\]\|#])"
+        regexsource2 = "\{\{" + templatesource + "[_ ]{0,1}\}\}"
         regex1 = re.compile(regexsource, re.I) # This covers most wikilinks
         regex2 = re.compile(regexsource2, re.I) # This one is for the {{Build}} template used for the admin noticeboard/user talks
         # Build the replace strings
@@ -77,15 +79,46 @@ def regexbuild(source, destination):
             replace2 = "{{" + destination.replace(":", "|") + "}}"
         else:
             replace2 = "[[" + destination + "]]"
+        srpairs = [(regex1, replace1), (regex2, replace2)]
     else:
-        regexsource = "\[\[" + source.replace(" ", "[_ ]").replace(":", "(?:%3A|:)[_ ]{0,1}").replace("'", "(?:%27|')") + "[_ ]{0,1}(?:#.*?){0,1}(\|.*?){0,1}\]\]"
-        regexsource2 = "\{\{" + source.replace("'", "(%27|')").replace(":", "\|").replace(" ", "[_ ]") + "[_ ]{0,1}\}\}"
+        regexsource = "\[\[" + parsedsource + "[_ ]{0,1}(?:#.*?){0,1}(\|.*?){0,1}\]\]"
+        regexsource2 = "\{\{" + templatesource + "[_ ]{0,1}\}\}"
         regex1 = re.compile(regexsource, re.I) # This covers most wikilinks
         regex2 = re.compile(regexsource2, re.I) # This one is for the {{Build}} template used for the admin noticeboard/user talks
         # Build the replace strings
-        replace1 = "{{DeletedLogLink|" + source + "{pipedtext}}}"
-        replace2 = "{{DeletedLogLink|" + source + "}}"
+        replace1 = "{{LogLink|" + source + "{pipedtext}}}"
+        replace2 = "{{LogLink|" + source + "}}"
     regexes = {source:[regex1, replace1, regex2, replace2]}
+    return regexes
+
+def regexbuildrewrite(source, destination): # FIXME
+    '''Build the regexes for finding links/templates to update.'''
+    parsedsource = source.replace(" ", "[_ ]").replace(":", "(?:%3A|:)[_ ]{0,1}").replace("'", "(?:%27|')") # People sure are creative in linking in weird ways
+    templatesource = source.replace(":", "\|").replace("'", "(%27|')").replace(" ", "[_ ]") # For {{Build}}
+    # FIXME: remove re.I, replace with specific case insensitive positions in regex (start of namespace & start of title)
+    regexsource1 =  "\[\[" + parsedsource + "[_ ]{0,1}(#.*?){0,1}(\|.*?){0,1}\]\]"
+    regex1 = re.compile(regexsource1, re.I) # This covers most wikilinks
+    regexsource2 = "\{\{" + templatesource + "[_ ]{0,1}\}\}"
+    regex2 = re.compile(regexsource2, re.I) # This one is for the {{Build}} template used for the admin noticeboard/user talks
+    regexsource3 = "\{\{(?:Deleted|Moved)Link\|" + parsedsource + "\}\}"
+    regex3 = re.compile(regexsource3) # This is for converting {{DeletedLink}} and {{MovedLink}} to {{LogLink}}
+    
+    if destination:
+        # Build the replace strings
+        replace1 = "[[" + destination + "{sectiontext}" + "{pipedtext}" + "]]"
+        # If the destination is not another Build: namespace article, the {{Build}} template needs to be replaced with a link
+        if re.search("^Build:", destination) != None:
+            replace2 = "{{" + destination.replace(":", "|") + "}}"
+        else:
+            replace2 = "[[" + destination + "]]"
+        srpairs = [(regex1, replace1), (regex2, replace2)]
+    else:
+        # Build the replace strings
+        replace1 = "{{LogLink|" + source + "{pipedtext}}}"
+        replace2 = "{{LogLink|" + source + "}}"
+        replace3 = "{{LogLink|" + source + "}}"
+        srpairs = [(regex1, replace1), (regex2, replace2), (regex3, replace3)]
+    regexes = {source:srpairs}
     return regexes
 
 def settimestamp(prompt):
@@ -142,7 +175,8 @@ class BotSession:
             params_csrftoken = {
                 'action':"query",
                 'meta':"tokens",
-                'format':"json"
+                'format':"json",
+                'assert':"bot"
             }
             
             self.csrftoken = self.apipost(params_csrftoken)['query']['tokens']['csrftoken']
@@ -224,38 +258,34 @@ class BotSession:
             elif response == 'd':
                 break
 
-    def sweep(self):
+    def sweep(self): # FIXME: Hits rate limits for moving pages
         '''Moves all pages in one userspace to another.'''
         regexdict = dict()
         fixlist = set()
         # Prompt user for the old & new usernames
         oldusername = input("\nOld username: ")
-        newusername = input("\nNew username: ")
+        newusername = input("New username: ")
         if oldusername == "" or newusername == "":
+            print("Aborting.")
+            return
+        if oldusername == newusername:
+            print("Those are the same user.")
             return
         pagelist = self.getuserpages(oldusername)
         # Move pages
         for page in pagelist:
             newpage = re.sub(r'^User:' + oldusername, 'User:' + newusername, page)
             newpage = re.sub(r'^User talk:' + oldusername, 'User talk:' + newusername, newpage)
-            self.movepage(page, newpage, regexdict)
+            status = self.movepage(page, newpage, regexdict)
+            sleep(5)
         # Get list of pages with links to fix
-        for page in pagelist:
-            brokenlinkpages = self.whatlinkshere(page)
-            for b in brokenlinkpages:
-                fixlist.add(b)
-        # Save a copy of the link fix list and the regex dictionary, in case the script crashes
-        with open(oldusername + "-" + newusername + "-fixlist.txt", "a") as savelist:
-            for f in fixlist:
-                line = f + "\n"
-                savelist.write(line)
-        with open(oldusername + "-" + newusername + "-regex.txt", "a") as savedict:
-            for r in regexdict:
-                line = str(r) + " : " + regexdict[r] + "\n"
-                savedict.write(line)
+        # for page in pagelist:
+            # brokenlinkpages = self.whatlinkshere(page)
+            # for b in brokenlinkpages:
+                # fixlist.add(b)
         # Fix links
-        for page in fixlist:
-            self.updatelinks(page, regexdict)
+        # for page in fixlist:
+            # self.updatelinks(page, regexdict)
 
     def resign(self):
         '''Deletes all pages in a given userspace.'''
@@ -530,17 +560,20 @@ class BotSession:
         return result
 
     def makepagelist(self, prompt = "Base page or category: "):
-        '''Interprets user input as either a single page or a category to get pages from.'''
+        '''Interprets user input as either a single page or a category/whatlinkshere to get pages from.'''
         pagelist = []
         basepage = input(prompt)
         if basepage == "":
             return pagelist
-        if not self.pageexist(basepage):
-            print(basepage + " does not exist.")
         if re.match(r'Category:', basepage):
             pagelist = self.getcategory(basepage)
-        else:
+        elif re.match(r'Special:WhatLinksHere\/', basepage):
+            page = basepage.replace('Special:WhatLinksHere/','')
+            pagelist = self.whatlinkshere(page)
+        elif self.pageexist(basepage):
             pagelist.append(basepage)
+        else:
+            print(basepage + " does not exist.")
         return pagelist
 
     def getcategory(self, category):
@@ -661,7 +694,8 @@ class BotSession:
             'summary':reason,
             'text':pagetext,
             'token':self.csrftoken,
-            'format':"json"
+            'format':"json",
+            'assert':"bot"
         }
         
         editcommit = self.apipost(params_editpage)
@@ -674,7 +708,7 @@ class BotSession:
         except KeyError:
             return False
 
-    def movepage(self, oldpage, newpage, regexdict):
+    def movepage(self, oldpage, newpage, regexdict): # FIXME: Adjust to move subpages+talk
         '''Move a page to a new title.'''
         params_move = {
             'action':"move",
@@ -683,7 +717,8 @@ class BotSession:
             'reason':"Username change",
             'noredirect':"yes",
             'format':"json",
-            'token':self.csrftoken
+            'token':self.csrftoken,
+            'assert':"bot"
         }
         
         moveresult = self.apipost(params_move)
@@ -691,9 +726,10 @@ class BotSession:
         try:
             print("'" + moveresult['move']['from'] + "' moved to '" + moveresult['move']['to'] + "'.")
             regexdict.update(regexbuild(oldpage, newpage))
+            return moveresult
         except KeyError:
             print("'" + oldpage + "' to '" + newpage + "':" + moveresult['error']['info'])
-        return moveresult
+            return False
 
     def whatlinkshere(self, page):
         '''Return all pages that link to a given page.'''
@@ -714,14 +750,34 @@ class BotSession:
             linkshere = [] #No links found
         for p in linkshere:
             linkpages.add(p['title'])
+        linkpages.update(self.whatembedsthis(page))
         return linkpages
+
+    def whatembedsthis(self, title):
+        '''Return all pages that transclude a given page.'''
+        embedpages = set()
+        params_embedsthis = {
+            'action':"query",
+            'format':"json",
+            'list':"embeddedin",
+            'eititle':title,
+            'eilimit':"max"
+        }
+        
+        try:
+            response = self.apiget(params_embedsthis)['query']['embeddedin']
+            for page in response:
+                embedpages.add(page['title'])
+        except KeyError:
+            pass
+        return embedpages
 
     def updatelinks(self, page, regexdict):
         '''Update links of moved pages.'''
         pagetext = self.readpage(page)
         newpagetext = pagetext
         for a, b in regexdict.items():
-            if "{{DeletedLogLink" in b[1]:
+            if "{{LogLink" in b[1]:
                 while True:
                     breakcounter = 0
                     try:
@@ -763,6 +819,26 @@ class BotSession:
         else:
             print("WARNING: Success message not received for '" + page + "'!")
 
+    def updatelinksrewrite(self, page, regexdict):
+        '''Update links of moved pages.'''
+        pagetext = self.readpage(page)
+        newpagetext = pagetext
+        for source, srpairs in regexdict.items():
+            for pair in srpairs:
+                pass # FIXME
+            if page in source:
+                sublink = re.sub("^" + page, "", source)
+                regexsublink = re.compile("\[\[" + sublink.replace(" ", "[_ ]").replace(":", "(?:%3A|:)[_ ]{0,1}").replace("'", "(?:%27|')") + "[_ ]{0,1}(?=[\]\|#])", re.I)
+                newpagetext = re.sub(regexsublink, srpairs[1], newpagetext) # FIXME: srpairs is not the correct thing to call here
+        if newpagetext == pagetext:
+            print("No changes made to " + page + ". Broken links not identified.") # Caused by templates/link formats the script does not yet account for
+            return
+        status = self.editpage(page, newpagetext, "Updating links of moved pages")
+        if status:
+            print("Links on '" + page + "' updated.")
+        else:
+            print("WARNING: Success message not received for '" + page + "'!")
+
     def readpage(self, page):
         '''Get page wikitext.'''
         params_readpage = {
@@ -785,7 +861,8 @@ class BotSession:
             'title':page,
             'reason':reason,
             'format':"json",
-            'token':self.csrftoken
+            'token':self.csrftoken,
+            'assert':"bot"
         }
         
         result = self.apipost(params_delete)
@@ -803,7 +880,8 @@ class BotSession:
             'title':title,
             'reason':reason,
             'token':self.csrftoken,
-            'format':"json"
+            'format':"json",
+            'assert':"bot"
         }
         
         result = self.apipost(params_restore)
@@ -883,7 +961,8 @@ class BotSession:
         params_logout = {
             'action':"logout",
             'token':self.csrftoken,
-            'format':"json"
+            'format':"json",
+            'assert':"bot"
         }
         
         self.apipost(params_logout)
