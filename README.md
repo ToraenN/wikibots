@@ -3,7 +3,7 @@ This is the script that powers AutoToraen. To use this, you need to set up a bot
 So far, it can do the following things:
 
 # Find and replace
-Does what it says. Accepts simple string substitutions or regular expression matching and can operate on individual pages or categories. It is recommended to test your replacements on a single page before using it on an entire category. You can also have it work from "Special:WhatLinksHere/<pagename>".
+Does what it says. Accepts simple string substitutions or regular expression matching and can operate on individual pages or categories. It is recommended to test your replacements on a single page before using it on an entire category. You can also have it work from "Special:WhatLinksHere/Pagename".
 
 # Fix links of moved pages
 Given a page name, the script tries to find the name it was moved to (following move chains as needed) and fixes all links to point to the new name. If a destination cannot be found, any links will be converted to a {{LogLink}} template.
