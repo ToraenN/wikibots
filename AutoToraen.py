@@ -65,13 +65,13 @@ def inputint(prompt, limit):
 
 def regexbuild(source, destination):
     '''Build the regexes for finding links/templates to update.'''
-    parsedsource = source.replace(" ", "[_ ]").replace(":", "(?:%3A|:)[_ ]{0,1}").replace("'", "(?:%27|')") # People sure are creative in linking in weird ways
-    templatesource = source.replace(":", "\|").replace("'", "(%27|')").replace(" ", "[_ ]") # For {{Build}}
+    parsedsource = source.replace("\\","\\\\").replace("(","\(").replace(")","\)").replace(" ", "[_ ]").replace(":", "(?:%3A|:)[_ ]{0,1}").replace("'", "(?:%27|')") # People sure are creative in linking in weird ways
+    templatesource = source.replace("\\","\\\\").replace("(","\(").replace(")","\)").replace(":", "\|").replace("'", "(%27|')").replace(" ", "[_ ]") # For {{Build}}
     if destination:
-        regexsource =  "\[\[" + parsedsource + "[_ ]{0,1}(?=[\]\|#])"
-        regexsource2 = "\{\{" + templatesource + "[_ ]{0,1}\}\}"
-        regex1 = re.compile(regexsource, re.I) # This covers most wikilinks
-        regex2 = re.compile(regexsource2, re.I) # This one is for the {{Build}} template used for the admin noticeboard/user talks
+        regexsource =  "\[\[[_ ]{0,}" + parsedsource + "[_ ]{0,}[^ -~]{0,}(?=[\]\|#])"
+        regexsource2 = "\{\{" + templatesource + "[_ ]{0,1}[^ -~]{0,}\}\}"
+        regex1 = re.compile(regexsource) # This covers most wikilinks
+        regex2 = re.compile(regexsource2) # This one is for the {{Build}} template used for the admin noticeboard/user talks
         # Build the replace strings
         replace1 = "[[" + destination
         # If the destination is not another Build: namespace article, the {{Build}} template needs to be replaced with a link
@@ -81,10 +81,10 @@ def regexbuild(source, destination):
             replace2 = "[[" + destination + "]]"
         srpairs = [(regex1, replace1), (regex2, replace2)]
     else:
-        regexsource = "\[\[" + parsedsource + "[_ ]{0,1}(?:#.*?){0,1}(\|.*?){0,1}\]\]"
-        regexsource2 = "\{\{" + templatesource + "[_ ]{0,1}\}\}"
-        regex1 = re.compile(regexsource, re.I) # This covers most wikilinks
-        regex2 = re.compile(regexsource2, re.I) # This one is for the {{Build}} template used for the admin noticeboard/user talks
+        regexsource = "\[\[[_ ]{0,}" + parsedsource + "[_ ]{0,1}[^ -~]{0,}(?:#.*?){0,1}(\|.*?){0,1}\]\]"
+        regexsource2 = "\{\{" + templatesource + "[_ ]{0,1}[^ -~]{0,}\}\}"
+        regex1 = re.compile(regexsource) # This covers most wikilinks
+        regex2 = re.compile(regexsource2) # This one is for the {{Build}} template used for the admin noticeboard/user talks
         # Build the replace strings
         replace1 = "{{LogLink|" + source + "{pipedtext}}}"
         replace2 = "{{LogLink|" + source + "}}"
@@ -93,16 +93,14 @@ def regexbuild(source, destination):
 
 def regexbuildrewrite(source, destination): # FIXME
     '''Build the regexes for finding links/templates to update.'''
-    parsedsource = source.replace(" ", "[_ ]").replace(":", "(?:%3A|:)[_ ]{0,1}").replace("'", "(?:%27|')") # People sure are creative in linking in weird ways
-    templatesource = source.replace(":", "\|").replace("'", "(%27|')").replace(" ", "[_ ]") # For {{Build}}
+    parsedsource = source.replace("\\","\\\\").replace("(","\(").replace(")","\)").replace(" ", "[_ ]").replace(":", "(?:%3A|:)[_ ]{0,1}").replace("'", "(?:%27|')") # People sure are creative in linking in weird ways
+    templatesource = source.replace("\\","\\\\").replace("(","\(").replace(")","\)").replace(":", "\|").replace("'", "(%27|')").replace(" ", "[_ ]") # For {{Build}}
     # FIXME: remove re.I, replace with specific case insensitive positions in regex (start of namespace & start of title)
-    regexsource1 =  "\[\[" + parsedsource + "[_ ]{0,1}(#.*?){0,1}(\|.*?){0,1}\]\]"
+    regexsource1 =  "\[\[" + parsedsource + "[_ ]{0,1}[^ -~]{0,}(#.*?){0,1}(\|.*?){0,1}\]\]"
     regex1 = re.compile(regexsource1, re.I) # This covers most wikilinks
-    regexsource2 = "\{\{" + templatesource + "[_ ]{0,1}\}\}"
+    regexsource2 = "\{\{" + templatesource + "[_ ]{0,1}[^ -~]{0,}\}\}"
     regex2 = re.compile(regexsource2, re.I) # This one is for the {{Build}} template used for the admin noticeboard/user talks
-    regexsource3 = "\{\{(?:Deleted|Moved)Link\|" + parsedsource + "\}\}"
-    regex3 = re.compile(regexsource3) # This is for converting {{DeletedLink}} and {{MovedLink}} to {{LogLink}}
-    
+
     if destination:
         # Build the replace strings
         replace1 = "[[" + destination + "{sectiontext}" + "{pipedtext}" + "]]"
@@ -111,13 +109,11 @@ def regexbuildrewrite(source, destination): # FIXME
             replace2 = "{{" + destination.replace(":", "|") + "}}"
         else:
             replace2 = "[[" + destination + "]]"
-        srpairs = [(regex1, replace1), (regex2, replace2)]
     else:
         # Build the replace strings
         replace1 = "{{LogLink|" + source + "{pipedtext}}}"
         replace2 = "{{LogLink|" + source + "}}"
-        replace3 = "{{LogLink|" + source + "}}"
-        srpairs = [(regex1, replace1), (regex2, replace2), (regex3, replace3)]
+    srpairs = [(regex1, replace1), (regex2, replace2)]
     regexes = {source:srpairs}
     return regexes
 
@@ -189,21 +185,25 @@ class BotSession:
         subjobid = inputint(message, 3)
         if subjobid == 0:
             # Manual entry
-            moveentries = []
-            index = 0
             while True:
-                index += 1
-                # Prompt user for the old name of the page
-                source = input(str(index) + ":Old name: ")
-                # Break loop, and thus move to processing, if source is blank.
-                if source == "":
+                moveentries = []
+                index = 0
+                while True:
+                    index += 1
+                    # Prompt user for the old name of the page
+                    source = input(str(index) + ":Old name: ")
+                    # Break loop, and thus move to processing, if source is blank.
+                    if source == "":
+                        break
+                    else:
+                        moveentries.append({'title':source})
+                # If nothing was entered, return to job listing
+                if len(moveentries) == 0:
                     break
-                else:
-                    moveentries.append({'title':source})
-            movelist, titlelist = self.parsemoveentries(moveentries)
-            regexdict = self.finddestinations(movelist)
-            for title in titlelist:
-                self.updatelinks(title, regexdict)
+                movelist, titlelist = self.parsemoveentries(moveentries)
+                regexdict = self.finddestinations(movelist)
+                for title in titlelist:
+                    self.updatelinks(title, regexdict)
         if subjobid == 1:
             # Check move log from specific date forward
             timestamp = settimestamp('move log')
