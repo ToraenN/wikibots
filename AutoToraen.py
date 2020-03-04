@@ -817,7 +817,7 @@ class BotSession:
         if newpagetext == pagetext:
             print("No changes made to " + page + ". Broken links not identified.") # Caused by templates/link formats the script does not yet account for
             return
-        status = self.editpage(page, newpagetext, "Updating links of moved pages")
+        status = self.editpage(page, newpagetext, "Updating links.")
         if status:
             print("Links on '" + page + "' updated.")
         else:
