@@ -14,7 +14,7 @@ def main():
     # Build the job listing
     jobs = []
     jobs.append(("Find and replace.", bot.typo)) # Perform find/replace operations
-    jobs.append(("Update links to moved pages.", bot.mplf)) # Link fixing
+    jobs.append(("Update links to moved/deleted pages.", bot.mplf)) # Link fixing
     jobs.append(("Convert subpage links.", bot.sublinker)) # Change absolute links to subpages into relative links, or vice versa
     jobs.append(("Convert external links to interwiki links.", bot.interwiki)) # Convert external links to interwiki links where possible
     jobs.append(("Swap gw/gww interwiki links.", bot.wikiswap)) # Convert [[gw:]] links to [[gww:]] links or vice versa
@@ -68,7 +68,7 @@ def regexbuild(source, destination):
     parsedsource = source.replace("\\","\\\\").replace("(","\(").replace(")","\)").replace(" ", "[_ ]").replace(":", "(?:%3A|:)[_ ]{0,1}").replace("'", "(?:%27|')") # People sure are creative in linking in weird ways
     templatesource = source.replace("\\","\\\\").replace("(","\(").replace(")","\)").replace(":", "\|").replace("'", "(%27|')").replace(" ", "[_ ]") # For {{Build}}
     if destination:
-        regexsource =  "\[\[[_ ]{0,}" + parsedsource + "[_ ]{0,}[^ -~]{0,}(?=[\]\|#])"
+        regexsource = "\[\[[_ ]{0,}" + parsedsource + "[_ ]{0,}[^ -~]{0,}(?=[\]\|#])"
         regexsource2 = "\{\{" + templatesource + "[_ ]{0,1}[^ -~]{0,}\}\}"
         regex1 = re.compile(regexsource) # This covers most wikilinks
         regex2 = re.compile(regexsource2) # This one is for the {{Build}} template used for the admin noticeboard/user talks
@@ -79,7 +79,6 @@ def regexbuild(source, destination):
             replace2 = "{{" + destination.replace(":", "|") + "}}"
         else:
             replace2 = "[[" + destination + "]]"
-        srpairs = [(regex1, replace1), (regex2, replace2)]
     else:
         regexsource = "\[\[[_ ]{0,}" + parsedsource + "[_ ]{0,1}[^ -~]{0,}(?:#.*?){0,1}(\|.*?){0,1}\]\]"
         regexsource2 = "\{\{" + templatesource + "[_ ]{0,1}[^ -~]{0,}\}\}"
@@ -88,7 +87,8 @@ def regexbuild(source, destination):
         # Build the replace strings
         replace1 = "{{LogLink|" + source + "{pipedtext}}}"
         replace2 = "{{LogLink|" + source + "}}"
-    regexes = {source:[regex1, replace1, regex2, replace2]}
+    srpairs = [regex1, replace1, regex2, replace2]
+    regexes = {source:srpairs}
     return regexes
 
 def regexbuildrewrite(source, destination): # FIXME
@@ -96,10 +96,10 @@ def regexbuildrewrite(source, destination): # FIXME
     parsedsource = source.replace("\\","\\\\").replace("(","\(").replace(")","\)").replace(" ", "[_ ]").replace(":", "(?:%3A|:)[_ ]{0,1}").replace("'", "(?:%27|')") # People sure are creative in linking in weird ways
     templatesource = source.replace("\\","\\\\").replace("(","\(").replace(")","\)").replace(":", "\|").replace("'", "(%27|')").replace(" ", "[_ ]") # For {{Build}}
     # FIXME: remove re.I, replace with specific case insensitive positions in regex (start of namespace & start of title)
-    regexsource1 =  "\[\[" + parsedsource + "[_ ]{0,1}[^ -~]{0,}(#.*?){0,1}(\|.*?){0,1}\]\]"
-    regex1 = re.compile(regexsource1, re.I) # This covers most wikilinks
+    regexsource1 = "\[\[" + parsedsource + "[_ ]{0,1}[^ -~]{0,}(#.*?){0,1}(\|.*?){0,1}\]\]"
+    regex1 = re.compile(regexsource1) # This covers most wikilinks
     regexsource2 = "\{\{" + templatesource + "[_ ]{0,1}[^ -~]{0,}\}\}"
-    regex2 = re.compile(regexsource2, re.I) # This one is for the {{Build}} template used for the admin noticeboard/user talks
+    regex2 = re.compile(regexsource2) # This one is for the {{Build}} template used for the admin noticeboard/user talks
 
     if destination:
         # Build the replace strings
@@ -180,8 +180,8 @@ class BotSession:
             self.csrftoken = ""
     
     def mplf(self):
-        '''Update links to moved pages.'''
-        message = "Would you like to:\n0: Enter moves manually?\n1: Check the move log?\n2: Listen for moves?\nChoose a number: "
+        '''Update links to moved/deleted pages.'''
+        message = "Would you like to:\n0: Enter moves/deletions manually?\n1: Check the logs?\n2: Listen for moves/deletions?\nChoose a number: "
         subjobid = inputint(message, 3)
         if subjobid == 0:
             # Manual entry
@@ -200,7 +200,7 @@ class BotSession:
                 # If nothing was entered, return to job listing
                 if len(moveentries) == 0:
                     break
-                movelist, titlelist = self.parsemoveentries(moveentries)
+                movelist, titlelist = self.parselogentries(moveentries)
                 regexdict = self.finddestinations(movelist)
                 for title in titlelist:
                     self.updatelinks(title, regexdict)
@@ -209,7 +209,9 @@ class BotSession:
             timestamp = settimestamp('move log')
             username = input('Limit to user: ')
             moveentries = self.checklog('move', username = username, timestamp = timestamp)
-            movelist, titlelist = self.parsemoveentries(moveentries)
+            deleteentries = self.checklog('delete', username = username, timestamp = timestamp)
+            logentries = moveentries + deleteentries
+            movelist, titlelist = self.parselogentries(logentries)
             regexdict = self.finddestinations(movelist, timestamp = timestamp)
             for title in titlelist:
                 self.updatelinks(title, regexdict)
@@ -227,9 +229,11 @@ class BotSession:
                     sleep(waittime)
                     newtimestamp = refreshtimestamp()
                     moveentries = self.checklog('move', timestamp = timestamp)
-                    if len(moveentries) == 0:
-                        print("No moves detected since " + timestamp + "!")
-                    movelist, titlelist = self.parsemoveentries(moveentries)
+                    deleteentries = self.checklog('delete', timestamp = timestamp)
+                    logentries = moveentries + deleteentries
+                    if len(logentries) == 0:
+                        print("No moves or deletions detected since " + timestamp + "!")
+                    movelist, titlelist = self.parselogentries(logentries)
                     regexdict = self.finddestinations(movelist, timestamp = timestamp, prompt = False)
                     for title in titlelist:
                         self.updatelinks(title, regexdict)
@@ -892,11 +896,11 @@ class BotSession:
             print("Could not restore '" + title + "'. Error code: " + result['error']['code'])
         return result
 
-    def parsemoveentries(self, moveentries):
+    def parselogentries(self, logentries):
         '''Determine which move entries require links to be updated.'''
         movelist = []
         titlelist = set()
-        for entry in moveentries:
+        for entry in logentries:
             title = entry['title']
             # Check if the page exists (so we can ignore recreated pages)
             if self.pageexist(title) and not self.isredirect(title):

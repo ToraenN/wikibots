@@ -5,13 +5,13 @@ So far, it can do the following things:
 # Find and replace
 Does what it says. Accepts simple string substitutions or regular expression matching and can operate on individual pages or categories. It is recommended to test your replacements on a single page before using it on an entire category. You can also have it work from "Special:WhatLinksHere/Pagename".
 
-# Fix links of moved pages
+# Fix links of moved & deleted pages
 Given a page name, the script tries to find the name it was moved to (following move chains as needed) and fixes all links to point to the new name. If a destination cannot be found, any links will be converted to a {{LogLink}} template.
 
 Comes in three flavors:
 * Manually enter pages
-* Crawl the move log from a specific time to the present
-* Check the move log periodically and act on any moves that occur.
+* Crawl the move & deletion logs from a specific time to the present
+* Check the move & deletion logs periodically and act on any moves and deletions that occur.
 
 # Convert subpage links
 Converts all links to subpages on a given page to relative links or to absolute links.
@@ -21,6 +21,9 @@ For links to Guildwiki, Guild Wars Wiki and Speed Clear Wiki (as well as any 'ex
 
 # Convert interwiki links between Guildwiki and Guild Wars Wiki:
 Checks that page exists on GWW or GW before converting the link. You can choose either direction to convert and either all possible links or select whether each unique link is converted.
+
+# Update build ratings
+Check a build (or category of builds) to ensure its Real-Vetting template matches the real rating, and update the template if necessary.
 
 # Userspace moves
 Moves all of a userspaces subpages to a new name and updates links to them.
