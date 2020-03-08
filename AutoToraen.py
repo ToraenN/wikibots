@@ -337,16 +337,9 @@ class BotSession:
     def interwiki(self):
         '''Convert external links to interwiki links.'''
         while True:
-            basepage = input("Base page or category: ")
-            if basepage == "":
+            pagelist = self.makepagelist()
+            if pagelist == None:
                 break
-            if not self.pageexist(basepage):
-                print(basepage + " does not exist.")
-                continue
-            if re.match(r'Category:', basepage):
-                pagelist = self.getcategory(basepage)
-            else:
-                pagelist = [basepage]
             for page in pagelist:
                 pagetext = self.readpage(page)
                 newtext = pagetext
@@ -395,7 +388,7 @@ class BotSession:
         existref = dict() # Remember which GW pages have been checked for existence
         while True:
             pagelist = self.makepagelist()
-            if len(pagelist) == 0:
+            if pagelist == None:
                 break
             regex = re.compile(regexprefix + '(.*?)\|')
             for page in pagelist:
@@ -457,7 +450,7 @@ class BotSession:
         print("")
         while True:
             pagelist = self.makepagelist()
-            if len(pagelist) == 0:
+            if pagelist == None:
                 break
             for page in pagelist:
                 try:
@@ -483,8 +476,8 @@ class BotSession:
         '''View the rating page of a build and find the overall rating. Then update the displayed rating.'''
         votereader = BotSession("https://gwpvx.gamepedia.com/index.php", login = False, edit = False)
         while True:
-            pagelist = self.makepagelist("Page or category: ")
-            if not pagelist:
+            pagelist = self.makepagelist()
+            if pagelist == None:
                 break
             for page in pagelist:
                 wikitext = self.readpage(page)
@@ -563,25 +556,36 @@ class BotSession:
         result = apicall.json()
         return result
 
-    def makepagelist(self, prompt = "Base page or category: "):
-        '''Interprets user input as either a single page or a category/whatlinkshere to get pages from.'''
-        pagelist = []
-        basepage = input(prompt)
-        if basepage == "":
-            return pagelist
-        if re.match(r'Category:', basepage):
-            pagelist = self.getcategory(basepage)
-        elif re.match(r'Special:WhatLinksHere\/', basepage):
-            page = basepage.replace('Special:WhatLinksHere/','')
-            pagelist = self.whatlinkshere(page)
-        elif self.pageexist(basepage):
-            pagelist.append(basepage)
+    def makepagelist(self):
+        '''Builds the list of pages to be processed by the calling function based on user input.'''
+        pagelist = set()
+        print("Please enter a:\nPagename - to process a single non-category page\nCategory: - to process all pages in a category\n:Category: - to process a category page\nSpecial:Whatlinkshere/ - to process all pages that link to a title\nLeave last entry blank to start processing.")
+        while True:
+            basepage = input("Entry: ")
+            if basepage == "":
+                break
+            if re.match(r'Category:', basepage):
+                pagelist.update(set(self.getcategory(basepage)))
+            elif re.match(r':Category:', basepage):
+                categorypage = basepage.lstrip(":")
+                if self.pageexist(categorypage):
+                    pagelist.add(categorypage)
+                else:
+                    print("Page for " + categorypage + " has not been created.")
+            elif re.match(r'Special:WhatLinksHere\/', basepage):
+                page = basepage.replace('Special:WhatLinksHere/','')
+                pagelist.update(set(self.whatlinkshere(page)))
+            elif self.pageexist(basepage):
+                pagelist.add(basepage)
+            else:
+                print(basepage + " does not exist.")
+        if len(pagelist) == 0:
+            return None
         else:
-            print(basepage + " does not exist.")
-        return pagelist
+            return pagelist
 
     def getcategory(self, category):
-        '''Retrieve all members of a category.'''
+        '''Retrieve all non-category members of a category.'''
         params_category = {
             'action':"query",
             'list':"categorymembers",
@@ -595,7 +599,8 @@ class BotSession:
             result = self.apiget(params_category)
             catmembers = result['query']['categorymembers']
             for c in catmembers:
-                pagelist.append(c['title'])
+                if not re.match(r"Category:", c['title']):
+                    pagelist.append(c['title'])
             try:
                 continuestr = result['continue']['cmcontinue']
                 params_category = {
