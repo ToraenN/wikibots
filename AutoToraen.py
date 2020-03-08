@@ -443,6 +443,12 @@ class BotSession:
             elif mode == 1:
                 find = input("Regular expression " + str(index) + ": ")
             if find != "":
+                try:
+                    find = re.compile(find)
+                except:
+                    print("Invalid regular expression.")
+                    index -= 1
+                    continue
                 replace = input("Replace with: ")
                 frpairs.update({find:replace})
             else:
