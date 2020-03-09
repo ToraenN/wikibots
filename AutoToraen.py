@@ -9,28 +9,31 @@ from datetime import datetime, date, time
 from time import sleep
 
 def main():
-    bot = BotSession() # Change default url in BotSession.__init__()
+    # Initial login
+    bot = BotSession()
+    # Build the job listing
+    jobs = []
+    jobs.append(("Find and replace.", bot.typo)) # Perform find/replace operations
+    jobs.append(("Update links to moved/deleted pages.", bot.mplf)) # Link fixing
+    jobs.append(("Convert subpage links.", bot.sublinker)) # Change absolute links to subpages into relative links, or vice versa
+    jobs.append(("Convert external links to interwiki links.", bot.interwiki)) # Convert external links to interwiki links where possible
+    jobs.append(("Swap gw/gww interwiki links.", bot.wikiswap)) # Convert [[gw:]] links to [[gww:]] links or vice versa
+    jobs.append(("Check accuracy of ratings.", bot.ratingcheck)) # Check the ratings of a build and update Real-Vetting tag if neccessary
+    jobs.append(("Move userspace to new name.", bot.sweep)) # Userspace move
+    jobs.append(("Resign user. (requires admin)", bot.resign)) # Userspace delete
+    jobs.append(("Reverse deletions. (requires admin)", bot.oops)) # Reverse deletions
+    jobs.append(("Change account.", bot.relog)) # Change to a different account
+    jobs.append(("Logout.", bot.exit)) # Exit script
+    message = "\nWhat would you like to do?"
+    for job in jobs:
+        jobmessage = job[0]
+        message += "\n" + str(jobs.index(job)) + ": " + jobmessage
+    message += "\nChoose the number of your job: "
+    # Prompt user for selection, loop so that we can do multiple things without having to re-launch
     while True:
-        if bot.loggedin != "Success": # If we selected to change account or login failed, bring up login prompt again
+        if bot.loggedin != "Success": # If we selected to change account or previous login failed, bring up login prompt again
             bot = BotSession()
-        jobs = []
-        jobs.append(("Find and replace.", bot.typo)) # Perform find/replace operations
-        jobs.append(("Update links to moved pages.", bot.mplf)) # Link fixing
-        jobs.append(("Convert subpage links.", bot.sublinker)) # Change absolute links to subpages into relative links, or vice versa
-        jobs.append(("Convert external links to interwiki links.", bot.interwiki)) # Convert external links to interwiki links where possible
-        jobs.append(("Swap gw/gww interwiki links.", bot.wikiswap)) # Convert [[gw:]] links to [[gww:]] links or vice versa
-        jobs.append(("Move userspace to new name.", bot.sweep)) # Userspace move
-        jobs.append(("Resign user. (requires admin)", bot.resign)) # Userspace delete
-        jobs.append(("Reverse deletions. (requires admin)", bot.oops)) # Reverse deletions
-        jobs.append(("Change account.", bot.relog)) # Change to a different account
-        jobs.append(("Logout.", bot.exit)) # Exit script
-        message = "\nWhat would you like to do?"
-        index = 0
-        for job in jobs:
-            jobmessage = (jobs[index])[0]
-            message += "\n" + str(index) + ": " + jobmessage
-            index += 1
-        message += "\nChoose the number of your job: "
+            continue
         jobid = inputint(message, len(jobs))
         ((jobs[jobid])[1])() # Run the selected job.
 
@@ -62,18 +65,56 @@ def inputint(prompt, limit):
 
 def regexbuild(source, destination):
     '''Build the regexes for finding links/templates to update.'''
-    regexsource =  "\[+" + source.replace("'", "(%27|')").replace(":", "(%3A|:)").replace(" ", "[_ ]").replace(":", "\:[_ ]{0,1}") + "[_ ]{0,1}(?=[\]\|#])"
-    regexsource2 = "\{+" + source.replace("'", "(%27|')").replace(":", "\|").replace(" ", "[_ ]").replace(":", "\:[_ ]{0,1}") + "[_ ]{0,1}\}+"
-    regex1 = re.compile(regexsource, re.I) # This covers most wikilinks
-    regex2 = re.compile(regexsource2, re.I) # This one is for the {{Build}} template used for the admin noticeboard/user talks
-    # Build the replace strings
-    replace1 = "[[" + destination
-    # If the destination is not another Build: namespace article, the {{Build}} template needs to be replaced with a link
-    if re.search("^Build:", destination) != None:
-        replace2 = "{{" + destination.replace(":", "|") + "}}"
+    parsedsource = source.replace("\\","\\\\").replace("(","\(").replace(")","\)").replace(" ", "[_ ]").replace(":", "(?:%3A|:)[_ ]{0,1}").replace("'", "(?:%27|')") # People sure are creative in linking in weird ways
+    templatesource = source.replace("\\","\\\\").replace("(","\(").replace(")","\)").replace(":", "\|").replace("'", "(%27|')").replace(" ", "[_ ]") # For {{Build}}
+    if destination:
+        regexsource = "\[\[[_ ]{0,}" + parsedsource + "[_ ]{0,}[^ -~]{0,}(?=[\]\|#])"
+        regexsource2 = "\{\{" + templatesource + "[_ ]{0,1}[^ -~]{0,}\}\}"
+        regex1 = re.compile(regexsource) # This covers most wikilinks
+        regex2 = re.compile(regexsource2) # This one is for the {{Build}} template used for the admin noticeboard/user talks
+        # Build the replace strings
+        replace1 = "[[" + destination
+        # If the destination is not another Build: namespace article, the {{Build}} template needs to be replaced with a link
+        if re.search("^Build:", destination) != None:
+            replace2 = "{{" + destination.replace(":", "|") + "}}"
+        else:
+            replace2 = "[[" + destination + "]]"
     else:
-        replace2 = "[[" + destination + "]]"
-    regexes = {source:[regex1, replace1, regex2, replace2]}
+        regexsource = "\[\[[_ ]{0,}" + parsedsource + "[_ ]{0,1}[^ -~]{0,}(?:#.*?){0,1}(\|.*?){0,1}\]\]"
+        regexsource2 = "\{\{" + templatesource + "[_ ]{0,1}[^ -~]{0,}\}\}"
+        regex1 = re.compile(regexsource) # This covers most wikilinks
+        regex2 = re.compile(regexsource2) # This one is for the {{Build}} template used for the admin noticeboard/user talks
+        # Build the replace strings
+        replace1 = "{{LogLink|" + source + "{pipedtext}}}"
+        replace2 = "{{LogLink|" + source + "}}"
+    srpairs = [regex1, replace1, regex2, replace2]
+    regexes = {source:srpairs}
+    return regexes
+
+def regexbuildrewrite(source, destination): # FIXME
+    '''Build the regexes for finding links/templates to update.'''
+    parsedsource = source.replace("\\","\\\\").replace("(","\(").replace(")","\)").replace(" ", "[_ ]").replace(":", "(?:%3A|:)[_ ]{0,1}").replace("'", "(?:%27|')") # People sure are creative in linking in weird ways
+    templatesource = source.replace("\\","\\\\").replace("(","\(").replace(")","\)").replace(":", "\|").replace("'", "(%27|')").replace(" ", "[_ ]") # For {{Build}}
+    # FIXME: remove re.I, replace with specific case insensitive positions in regex (start of namespace & start of title)
+    regexsource1 = "\[\[" + parsedsource + "[_ ]{0,1}[^ -~]{0,}(#.*?){0,1}(\|.*?){0,1}\]\]"
+    regex1 = re.compile(regexsource1) # This covers most wikilinks
+    regexsource2 = "\{\{" + templatesource + "[_ ]{0,1}[^ -~]{0,}\}\}"
+    regex2 = re.compile(regexsource2) # This one is for the {{Build}} template used for the admin noticeboard/user talks
+
+    if destination:
+        # Build the replace strings
+        replace1 = "[[" + destination + "{sectiontext}" + "{pipedtext}" + "]]"
+        # If the destination is not another Build: namespace article, the {{Build}} template needs to be replaced with a link
+        if re.search("^Build:", destination) != None:
+            replace2 = "{{" + destination.replace(":", "|") + "}}"
+        else:
+            replace2 = "[[" + destination + "]]"
+    else:
+        # Build the replace strings
+        replace1 = "{{LogLink|" + source + "{pipedtext}}}"
+        replace2 = "{{LogLink|" + source + "}}"
+    srpairs = [(regex1, replace1), (regex2, replace2)]
+    regexes = {source:srpairs}
     return regexes
 
 def settimestamp(prompt):
@@ -89,7 +130,7 @@ def refreshtimestamp():
 
 class BotSession:
     '''All functions that require the session's variables are methods of this class.'''
-    def __init__(self, url = "https://gwpvx.gamepedia.com/api.php", login = True):
+    def __init__(self, url = "https://gwpvx.gamepedia.com/api.php", login = True, edit = True):
         self.url = url
         self.session = requests.Session()
         if login:
@@ -126,41 +167,51 @@ class BotSession:
                 print("Login failed. Please ensure login details are correct.")
             
         # Get an edit token
-        params_csrftoken = {
-            'action':"query",
-            'meta':"tokens",
-            'format':"json"
-        }
-        
-        self.csrftoken = self.apipost(params_csrftoken)['query']['tokens']['csrftoken']
+        if edit:
+            params_csrftoken = {
+                'action':"query",
+                'meta':"tokens",
+                'format':"json",
+                'assert':"bot"
+            }
+            
+            self.csrftoken = self.apipost(params_csrftoken)['query']['tokens']['csrftoken']
+        else:
+            self.csrftoken = ""
     
     def mplf(self):
-        '''Update links to moved pages.'''
-        message = "Would you like to:\n0: Enter moves manually?\n1: Check the move log?\n2: Listen for moves?\nChoose a number: "
+        '''Update links to moved/deleted pages.'''
+        message = "Would you like to:\n0: Enter moves/deletions manually?\n1: Check the logs?\n2: Listen for moves/deletions?\nChoose a number: "
         subjobid = inputint(message, 3)
         if subjobid == 0:
             # Manual entry
-            moveentries = []
-            index = 0
             while True:
-                index += 1
-                # Prompt user for the old name of the page
-                source = input(str(index) + ":Old name: ")
-                # Break loop, and thus move to processing, if source is blank.
-                if source == "":
+                moveentries = []
+                index = 0
+                while True:
+                    index += 1
+                    # Prompt user for the old name of the page
+                    source = input(str(index) + ":Old name: ")
+                    # Break loop, and thus move to processing, if source is blank.
+                    if source == "":
+                        break
+                    else:
+                        moveentries.append({'title':source})
+                # If nothing was entered, return to job listing
+                if len(moveentries) == 0:
                     break
-                else:
-                    moveentries.append({'title':source})
-            movelist, titlelist = self.parsemoveentries(moveentries)
-            regexdict = self.finddestinations(movelist)
-            for title in titlelist:
-                self.updatelinks(title, regexdict)
+                movelist, titlelist = self.parselogentries(moveentries)
+                regexdict = self.finddestinations(movelist)
+                for title in titlelist:
+                    self.updatelinks(title, regexdict)
         if subjobid == 1:
             # Check move log from specific date forward
             timestamp = settimestamp('move log')
             username = input('Limit to user: ')
             moveentries = self.checklog('move', username = username, timestamp = timestamp)
-            movelist, titlelist = self.parsemoveentries(moveentries)
+            deleteentries = self.checklog('delete', username = username, timestamp = timestamp)
+            logentries = moveentries + deleteentries
+            movelist, titlelist = self.parselogentries(logentries)
             regexdict = self.finddestinations(movelist, timestamp = timestamp)
             for title in titlelist:
                 self.updatelinks(title, regexdict)
@@ -178,9 +229,11 @@ class BotSession:
                     sleep(waittime)
                     newtimestamp = refreshtimestamp()
                     moveentries = self.checklog('move', timestamp = timestamp)
-                    if len(moveentries) == 0:
-                        print("No moves detected since " + timestamp + "!")
-                    movelist, titlelist = self.parsemoveentries(moveentries)
+                    deleteentries = self.checklog('delete', timestamp = timestamp)
+                    logentries = moveentries + deleteentries
+                    if len(logentries) == 0:
+                        print("No moves or deletions detected since " + timestamp + "!")
+                    movelist, titlelist = self.parselogentries(logentries)
                     regexdict = self.finddestinations(movelist, timestamp = timestamp, prompt = False)
                     for title in titlelist:
                         self.updatelinks(title, regexdict)
@@ -209,38 +262,34 @@ class BotSession:
             elif response == 'd':
                 break
 
-    def sweep(self):
+    def sweep(self): # FIXME: Hits rate limits for moving pages
         '''Moves all pages in one userspace to another.'''
         regexdict = dict()
         fixlist = set()
         # Prompt user for the old & new usernames
         oldusername = input("\nOld username: ")
-        newusername = input("\nNew username: ")
+        newusername = input("New username: ")
         if oldusername == "" or newusername == "":
+            print("Aborting.")
+            return
+        if oldusername == newusername:
+            print("Those are the same user.")
             return
         pagelist = self.getuserpages(oldusername)
         # Move pages
         for page in pagelist:
             newpage = re.sub(r'^User:' + oldusername, 'User:' + newusername, page)
             newpage = re.sub(r'^User talk:' + oldusername, 'User talk:' + newusername, newpage)
-            self.movepage(page, newpage, regexdict)
+            status = self.movepage(page, newpage, regexdict)
+            sleep(5)
         # Get list of pages with links to fix
-        for page in pagelist:
-            brokenlinkpages = self.whatlinkshere(page)
-            for b in brokenlinkpages:
-                fixlist.add(b)
-        # Save a copy of the link fix list and the regex dictionary, in case the script crashes
-        with open(oldusername + "-" + newusername + "-fixlist.txt", "a") as savelist:
-            for f in fixlist:
-                line = f + "\n"
-                savelist.write(line)
-        with open(oldusername + "-" + newusername + "-regex.txt", "a") as savedict:
-            for r in regexdict:
-                line = str(r) + " : " + regexdict[r] + "\n"
-                savedict.write(line)
+        # for page in pagelist:
+            # brokenlinkpages = self.whatlinkshere(page)
+            # for b in brokenlinkpages:
+                # fixlist.add(b)
         # Fix links
-        for page in fixlist:
-            self.updatelinks(page, regexdict)
+        # for page in fixlist:
+            # self.updatelinks(page, regexdict)
 
     def resign(self):
         '''Deletes all pages in a given userspace.'''
@@ -288,16 +337,9 @@ class BotSession:
     def interwiki(self):
         '''Convert external links to interwiki links.'''
         while True:
-            basepage = input("Base page or category: ")
-            if basepage == "":
+            pagelist = self.makepagelist()
+            if pagelist == None:
                 break
-            if not self.pageexist(basepage):
-                print(basepage + " does not exist.")
-                continue
-            if re.match(r'Category:', basepage):
-                pagelist = self.getcategory(basepage)
-            else:
-                pagelist = [basepage]
             for page in pagelist:
                 pagetext = self.readpage(page)
                 newtext = pagetext
@@ -342,11 +384,11 @@ class BotSession:
             replaceprefix = '[[gw:'
         message = "\nConvert all possible links?\n0: Yes.\n1: Let me pick for each link.\nChoose a number: "
         manual = inputint(message, 2)
-        wikireader = BotSession(url, login = False) # Create a secondary read-only session for querying target wiki's api
+        wikireader = BotSession(url, login = False, edit = False) # Create a secondary read-only session for querying target wiki's api
         existref = dict() # Remember which GW pages have been checked for existence
         while True:
             pagelist = self.makepagelist()
-            if len(pagelist) == 0:
+            if pagelist == None:
                 break
             regex = re.compile(regexprefix + '(.*?)\|')
             for page in pagelist:
@@ -401,6 +443,12 @@ class BotSession:
             elif mode == 1:
                 find = input("Regular expression " + str(index) + ": ")
             if find != "":
+                try:
+                    find = re.compile(find)
+                except:
+                    print("Invalid regular expression.")
+                    index -= 1
+                    continue
                 replace = input("Replace with: ")
                 frpairs.update({find:replace})
             else:
@@ -408,7 +456,7 @@ class BotSession:
         print("")
         while True:
             pagelist = self.makepagelist()
-            if len(pagelist) == 0:
+            if pagelist == None:
                 break
             for page in pagelist:
                 try:
@@ -430,6 +478,72 @@ class BotSession:
                 except:
                     print("Editing cancelled suddenly. Please verify the bot's edits on the wiki.")
 
+    def ratingcheck(self):
+        '''View the rating page of a build and find the overall rating. Then update the displayed rating.'''
+        votereader = BotSession("https://gwpvx.gamepedia.com/index.php", login = False, edit = False)
+        while True:
+            pagelist = self.makepagelist()
+            if pagelist == None:
+                break
+            for page in pagelist:
+                wikitext = self.readpage(page)
+                newtext = str(wikitext)
+                templaterating = False # Fixme: write function for determining rating in template
+                templatestatus = False # Fixme: ditto for status
+                if templaterating == "trial" or templaterating == "abandoned" or templaterating == "archived":
+                    continue # Skip builds that don't need evaluation
+                if templaterating == "testing":
+                    testingage = False # Fixme: write function for determining age in testing category
+                
+                params_readratings = {
+                    'title':page,
+                    'action':"rate"
+                }
+            
+                response = votereader.session.get(url = votereader.url, params = params_readratings)
+                ratepage = response.text
+                ratefind = re.compile('Rating totals: (\d*?) votes.*?Overall.*?class="tdresult">(\d\.\d\d)<\/td><\/tr>', re.DOTALL)
+                ratestring = ratefind.search(ratepage)
+                if ratestring:
+                    ratecount = int(ratestring.group(1))
+                    rating = float(ratestring.group(2))
+                else: # No rating found or login is unrecognized.
+                    continue
+                return # The rest of this is psuedocode/untested and shouldn't run
+                
+                if rating:
+                    print("There are " + str(ratecount) + " votes. The rating of " + page + " is " + str(rating))
+                else:
+                    print("No rating found for " + page)
+                
+                if ratecount >= 5: # Handle as fully vetted build
+                    newtext = re.sub("\|status=provisional\|", "|", newtext)
+                    if rating >= 4.75:
+                        newtext = re.sub("\|rating=.?\|", "|rating=great|", newtext)
+                    elif rating >= 3.75:
+                        newtext = re.sub("\|rating=.?\|", "|rating=good|", newtext)
+                    else:
+                        if templaterating != "trash":
+                            newtext = re.sub("\|date=.*?\|", "|", wikitext)
+                            newtext = re.sub("\|rating=.?\|", "|rating=trash|~~~~~", newtext)
+                elif ratecount >= 2: # Handle as provisionally vetted build (unless meta)
+                    if templaterating == "testing":
+                        if testingage < "2 weeks": # Fixme: Relies on yet to be built function
+                            continue
+                    if not templatestatus: # If either status is defined, we won't overwrite it
+                        newtext = re.sub("\{+Real-Vetting\|", "{{Real-Vetting|status=provisional", newtext)
+                    if rating >= 4.75:
+                        newtext = re.sub("\|rating=.?\|", "|rating=great|", newtext)
+                    elif rating >= 3.75:
+                        newtext = re.sub("\|rating=.?\|", "|rating=good|", newtext)
+                    else:
+                        if templaterating != "trash":
+                            newtext = re.sub("\|date=.*?\|", "|", wikitext)
+                            newtext = re.sub("\|rating=.?\|", "|rating=trash|~~~~~", newtext)
+                else: # Revert to testing if rating has been erroneously applied
+                    newtext = re.sub("\|rating=.?\|", "|rating=testing|", newtext)
+                    newtext = re.sub("\|status=provisional\|", "|", newtext)
+
     def apiget(self, parameters):
         '''All GET requests go through this method.'''
         while True:
@@ -448,22 +562,36 @@ class BotSession:
         result = apicall.json()
         return result
 
-    def makepagelist(self, prompt = "Base page or category: "):
-        '''Interprets user input as either a single page or a category to get pages from.'''
-        pagelist = []
-        basepage = input(prompt)
-        if basepage == "":
-            return pagelist
-        if not self.pageexist(basepage):
-            print(basepage + " does not exist.")
-        if re.match(r'Category:', basepage):
-            pagelist = self.getcategory(basepage)
+    def makepagelist(self):
+        '''Builds the list of pages to be processed by the calling function based on user input.'''
+        pagelist = set()
+        print("Please enter a:\nPagename - to process a single non-category page\nCategory: - to process all pages in a category\n:Category: - to process a category page\nSpecial:Whatlinkshere/ - to process all pages that link to a title\nLeave last entry blank to start processing.")
+        while True:
+            basepage = input("Entry: ")
+            if basepage == "":
+                break
+            if re.match(r'Category:', basepage):
+                pagelist.update(set(self.getcategory(basepage)))
+            elif re.match(r':Category:', basepage):
+                categorypage = basepage.lstrip(":")
+                if self.pageexist(categorypage):
+                    pagelist.add(categorypage)
+                else:
+                    print("Page for " + categorypage + " has not been created.")
+            elif re.match(r'Special:WhatLinksHere\/', basepage):
+                page = basepage.replace('Special:WhatLinksHere/','')
+                pagelist.update(set(self.whatlinkshere(page)))
+            elif self.pageexist(basepage):
+                pagelist.add(basepage)
+            else:
+                print(basepage + " does not exist.")
+        if len(pagelist) == 0:
+            return None
         else:
-            pagelist.append(basepage)
-        return pagelist
+            return pagelist
 
     def getcategory(self, category):
-        '''Retrieve all members of a category.'''
+        '''Retrieve all non-category members of a category.'''
         params_category = {
             'action':"query",
             'list':"categorymembers",
@@ -477,7 +605,8 @@ class BotSession:
             result = self.apiget(params_category)
             catmembers = result['query']['categorymembers']
             for c in catmembers:
-                pagelist.append(c['title'])
+                if not re.match(r"Category:", c['title']):
+                    pagelist.append(c['title'])
             try:
                 continuestr = result['continue']['cmcontinue']
                 params_category = {
@@ -580,7 +709,8 @@ class BotSession:
             'summary':reason,
             'text':pagetext,
             'token':self.csrftoken,
-            'format':"json"
+            'format':"json",
+            'assert':"bot"
         }
         
         editcommit = self.apipost(params_editpage)
@@ -593,7 +723,7 @@ class BotSession:
         except KeyError:
             return False
 
-    def movepage(self, oldpage, newpage, regexdict):
+    def movepage(self, oldpage, newpage, regexdict): # FIXME: Adjust to move subpages+talk
         '''Move a page to a new title.'''
         params_move = {
             'action':"move",
@@ -602,7 +732,8 @@ class BotSession:
             'reason':"Username change",
             'noredirect':"yes",
             'format':"json",
-            'token':self.csrftoken
+            'token':self.csrftoken,
+            'assert':"bot"
         }
         
         moveresult = self.apipost(params_move)
@@ -610,9 +741,10 @@ class BotSession:
         try:
             print("'" + moveresult['move']['from'] + "' moved to '" + moveresult['move']['to'] + "'.")
             regexdict.update(regexbuild(oldpage, newpage))
+            return moveresult
         except KeyError:
             print("'" + oldpage + "' to '" + newpage + "':" + moveresult['error']['info'])
-        return moveresult
+            return False
 
     def whatlinkshere(self, page):
         '''Return all pages that link to a given page.'''
@@ -633,19 +765,86 @@ class BotSession:
             linkshere = [] #No links found
         for p in linkshere:
             linkpages.add(p['title'])
+        linkpages.update(self.whatembedsthis(page))
         return linkpages
+
+    def whatembedsthis(self, title):
+        '''Return all pages that transclude a given page.'''
+        embedpages = set()
+        params_embedsthis = {
+            'action':"query",
+            'format':"json",
+            'list':"embeddedin",
+            'eititle':title,
+            'eilimit':"max"
+        }
+        
+        try:
+            response = self.apiget(params_embedsthis)['query']['embeddedin']
+            for page in response:
+                embedpages.add(page['title'])
+        except KeyError:
+            pass
+        return embedpages
 
     def updatelinks(self, page, regexdict):
         '''Update links of moved pages.'''
         pagetext = self.readpage(page)
         newpagetext = pagetext
         for a, b in regexdict.items():
-            newpagetext = re.sub(b[0], b[1], newpagetext)
-            newpagetext = re.sub(b[2], b[3], newpagetext)
+            if "{{LogLink" in b[1]:
+                while True:
+                    breakcounter = 0
+                    try:
+                        findlink = re.search(b[0], newpagetext)
+                        matchlink = findlink[0]
+                        try:
+                            if findlink[1]:
+                                pipedreplace = findlink[1]
+                            else:
+                                pipedreplace = ""
+                        except:
+                            pipedreplace = ""
+                        replacelink = "{" + (b[1]).format(pipedtext=pipedreplace) + "}"
+                        newpagetext = newpagetext.replace(matchlink, replacelink)
+                    except:
+                        breakcounter += 1
+                    try:
+                        findtemplate = re.search(b[2], newpagetext)
+                        matchtemplate = findtemplate[0]
+                        replacetemplate = b[3]
+                        newpagetext = newpagetext.replace(matchtemplate, replacetemplate)
+                    except:
+                        breakcounter += 1
+                    if breakcounter == 2:
+                        break
+            else:
+                newpagetext = re.sub(b[0], b[1], newpagetext)
+                newpagetext = re.sub(b[2], b[3], newpagetext)
             if page in a:
                 sublink = re.sub("^" + page, "", a)
-                regexsublink = re.compile("\[+" + sublink.replace("'", "(%27|')").replace(":", "(%3A|:)").replace(" ", "[_ ]").replace(":", "\:[_ ]{0,1}") + "[_ ]{0,1}(?=[\]\|#])", re.I)
+                regexsublink = re.compile("\[+" + sublink.replace(" ", "[_ ]").replace(":", "(%3A|:)[_ ]{0,1}").replace("'", "(%27|')") + "[_ ]{0,1}(?=[\]\|#])", re.I)
                 newpagetext = re.sub(regexsublink, b[1] , newpagetext)
+        if newpagetext == pagetext:
+            print("No changes made to " + page + ". Broken links not identified.") # Caused by templates/link formats the script does not yet account for
+            return
+        status = self.editpage(page, newpagetext, "Updating links.")
+        if status:
+            print("Links on '" + page + "' updated.")
+        else:
+            print("WARNING: Success message not received for '" + page + "'!")
+
+    def updatelinksrewrite(self, page, regexdict):
+        '''Update links of moved pages.'''
+        pagetext = self.readpage(page)
+        newpagetext = pagetext
+        for source, srpairs in regexdict.items():
+            for pair in srpairs:
+                pass # FIXME
+            if page in source:
+                sublink = re.sub("^" + page, "", source)
+                regexsublink = re.compile("\[\[" + sublink.replace(" ", "[_ ]").replace(":", "(?:%3A|:)[_ ]{0,1}").replace("'", "(?:%27|')") + "[_ ]{0,1}(?=[\]\|#])", re.I)
+                newpagetext = re.sub(regexsublink, srpairs[1], newpagetext) # FIXME: srpairs is not the correct thing to call here
         if newpagetext == pagetext:
             print("No changes made to " + page + ". Broken links not identified.") # Caused by templates/link formats the script does not yet account for
             return
@@ -677,7 +876,8 @@ class BotSession:
             'title':page,
             'reason':reason,
             'format':"json",
-            'token':self.csrftoken
+            'token':self.csrftoken,
+            'assert':"bot"
         }
         
         result = self.apipost(params_delete)
@@ -695,7 +895,8 @@ class BotSession:
             'title':title,
             'reason':reason,
             'token':self.csrftoken,
-            'format':"json"
+            'format':"json",
+            'assert':"bot"
         }
         
         result = self.apipost(params_restore)
@@ -706,11 +907,11 @@ class BotSession:
             print("Could not restore '" + title + "'. Error code: " + result['error']['code'])
         return result
 
-    def parsemoveentries(self, moveentries):
+    def parselogentries(self, logentries):
         '''Determine which move entries require links to be updated.'''
         movelist = []
         titlelist = set()
-        for entry in moveentries:
+        for entry in logentries:
             title = entry['title']
             # Check if the page exists (so we can ignore recreated pages)
             if self.pageexist(title) and not self.isredirect(title):
@@ -766,7 +967,7 @@ class BotSession:
                 print("Destination for '" + source + "' found: " + destination)
             else:
                 print("No destination found for '" + source + "'.")
-                continue
+                destination = None
             regexdict.update(regexbuild(source, destination))
         return regexdict
 
@@ -775,7 +976,8 @@ class BotSession:
         params_logout = {
             'action':"logout",
             'token':self.csrftoken,
-            'format':"json"
+            'format':"json",
+            'assert':"bot"
         }
         
         self.apipost(params_logout)
@@ -783,7 +985,7 @@ class BotSession:
 
     def relog(self):
         self.logout()
-        self.loggedin = False
+        self.__init__()
 
     def exit(self):
         self.logout()
