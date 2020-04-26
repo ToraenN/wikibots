@@ -336,6 +336,12 @@ class BotSession:
 
     def interwiki(self):
         '''Convert external links to interwiki links.'''
+        regex = { # Links to an api.php or index.php using parameters are ignored.
+            'gww:':re.compile('(\[https{0,1}://wiki\.guildwars\.com/wiki/)(?!api\.php)(?!index\.php\?.*?&.*?=).*?( .*?\])'),
+            'gw:':re.compile('(\[https{0,1}://guildwiki\.gamepedia\.com/)(?!api\.php)(?!index\.php\?.*?&.*?=).*?( .*?\])'),
+            '':re.compile('(\[https{0,1}://gwpvx\.gamepedia\.com/)(?!api\.php)(?!index\.php\?.*?&.*?=).*?( .*?\])'),
+            'scw:':re.compile('(\[https{0,1}://wiki\.fbgmguild\.com/)(?!api\.php)(?!index\.php\?.*?&.*?=).*?( .*?\])')
+        }
         while True:
             pagelist = self.makepagelist()
             if pagelist == None:
@@ -343,12 +349,6 @@ class BotSession:
             for page in pagelist:
                 pagetext = self.readpage(page)
                 newtext = pagetext
-                regex = { # Links to an api.php or index.php using parameters are ignored.
-                    'gww:':re.compile('(\[https{0,1}://wiki\.guildwars\.com/wiki/)(?!api\.php)(?!index\.php\?.*?&.*?=).*?( .*?\])'),
-                    'gw:':re.compile('(\[https{0,1}://guildwiki\.gamepedia\.com/)(?!api\.php)(?!index\.php\?.*?&.*?=).*?( .*?\])'),
-                    '':re.compile('(\[https{0,1}://gwpvx\.gamepedia\.com/)(?!api\.php)(?!index\.php\?.*?&.*?=).*?( .*?\])'),
-                    'scw:':re.compile('(\[https{0,1}://wiki\.fbgmguild\.com/)(?!api\.php)(?!index\.php\?.*?&.*?=).*?( .*?\])')
-                }
                 for a, b in regex.items(): #'a' is the prefix to use for the interwiki link (or blank for internal link), 'b' is the regex that finds the associated external links
                     search = True
                     while search:
@@ -440,20 +440,25 @@ class BotSession:
             index += 1
             if mode == 0:
                 find = input("Wikitext to find " + str(index) + ": ")
+                if find != "":
+                    replace = input("Replace with: ")
+                    frpairs.update({find:replace})
+                else:
+                    break
             elif mode == 1:
                 find = input("Regular expression " + str(index) + ": ")
-            if find != "":
-                try:
-                    find = re.compile(find)
-                except:
-                    print("Invalid regular expression.")
-                    index -= 1
-                    continue
-                replace = input("Replace with: ")
-                frpairs.update({find:replace})
-            else:
-                break
-        print("")
+                if find != "":
+                    try:
+                        find = re.compile(find)
+                    except:
+                        print("Invalid regular expression.")
+                        index -= 1
+                        continue
+                    replace = input("Replace with: ")
+                    frpairs.update({find:replace})
+                else:
+                    break
+        
         while True:
             pagelist = self.makepagelist()
             if pagelist == None:
