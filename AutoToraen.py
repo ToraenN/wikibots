@@ -481,6 +481,9 @@ class BotSession:
     def ratingcheck(self):
         '''View the rating page of a build and find the overall rating. Then update the displayed rating.'''
         votereader = BotSession("https://gwpvx.gamepedia.com/index.php", login = False, edit = False)
+        templateratefind = re.compile('{{Real-Vetting\|.*?rating=(\w*)')
+        templatestatusfind = re.compile('{{Real-Vetting\|.*?status=(\w*)')
+        ratefind = re.compile('Rating totals: (\d*?) votes.*?Overall.*?(\d\.\d\d)', re.DOTALL)
         while True:
             pagelist = self.makepagelist()
             if pagelist == None:
@@ -488,11 +491,24 @@ class BotSession:
             for page in pagelist:
                 wikitext = self.readpage(page)
                 newtext = str(wikitext)
-                templaterating = False # Fixme: write function for determining rating in template
-                templatestatus = False # Fixme: ditto for status
-                if templaterating == "trial" or templaterating == "abandoned" or templaterating == "archived":
-                    continue # Skip builds that don't need evaluation
-                if templaterating == "testing":
+                templaterating = templateratefind.search(wikitext)
+                templatestatus = templatestatusfind.search(wikitext)
+                if not templaterating:
+                    templaterating = "undefined"
+                else:
+                    templaterating = templaterating.group(1)
+                    templaterating = templaterating.casefold()
+                
+                if not templatestatus:
+                    templatestatus = "undefined"
+                else:
+                    templatestatus = templatestatus.group(1)
+                    templatestatus = templatestatus.casefold()
+                
+                if templaterating == "undefined" or templaterating == "trial" or templaterating == "abandoned" or templaterating == "archived":
+                    print(page + ": page is not eligible for rating.")
+                    continue # Skip pages that don't need evaluation
+                elif templaterating == "testing":
                     testingage = False # Fixme: write function for determining age in testing category
                 
                 params_readratings = {
@@ -502,47 +518,55 @@ class BotSession:
             
                 response = votereader.session.get(url = votereader.url, params = params_readratings)
                 ratepage = response.text
-                ratefind = re.compile('Rating totals: (\d*?) votes.*?Overall.*?class="tdresult">(\d\.\d\d)<\/td><\/tr>', re.DOTALL)
                 ratestring = ratefind.search(ratepage)
                 if ratestring:
                     ratecount = int(ratestring.group(1))
                     rating = float(ratestring.group(2))
-                else: # No rating found or login is unrecognized.
-                    continue
-                return # The rest of this is psuedocode/untested and shouldn't run
-                
-                if rating:
-                    print("There are " + str(ratecount) + " votes. The rating of " + page + " is " + str(rating))
-                else:
-                    print("No rating found for " + page)
+                else: # No rating found.
+                    ratecount = 0
+                    rating = 0.0
+                print(page + ": " + str(ratecount) + " ratings. Overall: " + str(rating) + ". Template rating: " + templaterating + ". Status: " + templatestatus + ".")
                 
                 if ratecount >= 5: # Handle as fully vetted build
                     newtext = re.sub("\|status=provisional\|", "|", newtext)
-                    if rating >= 4.75:
-                        newtext = re.sub("\|rating=.?\|", "|rating=great|", newtext)
-                    elif rating >= 3.75:
-                        newtext = re.sub("\|rating=.?\|", "|rating=good|", newtext)
-                    else:
-                        if templaterating != "trash":
-                            newtext = re.sub("\|date=.*?\|", "|", wikitext)
-                            newtext = re.sub("\|rating=.?\|", "|rating=trash|~~~~~", newtext)
+                    if rating >= 4.75 and templaterating != "great":
+                        newtext = re.sub("\|date=.*?\|", "|", newtext)
+                        newtext = re.sub("\|rating=.*?\|", "|rating=great|", newtext)
+                    elif rating >= 3.75 and rating < 4.75 and templaterating != "good":
+                        newtext = re.sub("\|date=.*?\|", "|", newtext)
+                        newtext = re.sub("\|rating=.*?\|", "|rating=good|", newtext)
+                    elif rating < 3.75 and templaterating != "trash":
+                        newtext = re.sub("\|date=.*?\|", "|", newtext)
+                        newtext = re.sub("\|rating=.*?\|", "|rating=trash|date=~~~~~|", newtext)
                 elif ratecount >= 2: # Handle as provisionally vetted build (unless meta)
-                    if templaterating == "testing":
-                        if testingage < "2 weeks": # Fixme: Relies on yet to be built function
-                            continue
-                    if not templatestatus: # If either status is defined, we won't overwrite it
-                        newtext = re.sub("\{+Real-Vetting\|", "{{Real-Vetting|status=provisional", newtext)
-                    if rating >= 4.75:
-                        newtext = re.sub("\|rating=.?\|", "|rating=great|", newtext)
-                    elif rating >= 3.75:
-                        newtext = re.sub("\|rating=.?\|", "|rating=good|", newtext)
-                    else:
-                        if templaterating != "trash":
-                            newtext = re.sub("\|date=.*?\|", "|", wikitext)
-                            newtext = re.sub("\|rating=.?\|", "|rating=trash|~~~~~", newtext)
+                    # if templaterating == "testing":
+                        # if testingage < "2 weeks": # Fixme: Relies on yet to be built function
+                            # continue
+                    if templatestatus != "meta" and templatestatus != "provisional": # If status is validly defined, we won't overwrite/duplicate it
+                        newtext = re.sub("\|status=.*?\|", "|", newtext) # Remove any invalid status if present
+                        newtext = re.sub("\{\{Real-Vetting\|", "{{Real-Vetting|status=provisional|", newtext)
+                    if rating >= 4.75 and templaterating != "great":
+                        newtext = re.sub("\|date=.*?\|", "|", newtext)
+                        newtext = re.sub("\|rating=.*?\|", "|rating=great|", newtext)
+                    elif rating >= 3.75 and rating < 4.75 and templaterating != "good":
+                        newtext = re.sub("\|date=.*?\|", "|", newtext)
+                        newtext = re.sub("\|rating=.*?\|", "|rating=good|", newtext)
+                    elif rating < 3.75 and templaterating != "trash":
+                        newtext = re.sub("\|date=.*?\|", "|", newtext)
+                        newtext = re.sub("\|status=.*?\|", "|", newtext)
+                        newtext = re.sub("\|rating=.*?\|", "|rating=trash|date=~~~~~|", newtext)
                 else: # Revert to testing if rating has been erroneously applied
-                    newtext = re.sub("\|rating=.?\|", "|rating=testing|", newtext)
+                    newtext = re.sub("\|date=.*?\|", "|", newtext)
                     newtext = re.sub("\|status=provisional\|", "|", newtext)
+                    newtext = re.sub("\|rating=.*?\|", "|rating=testing|", newtext)
+                if wikitext != newtext:
+                    success = self.editpage(page, newtext, "Updating to verified rating.")
+                    if success:
+                        print("Rating of " + page + " has been updated.")
+                    else:
+                        print("WARNING: Attempt to update rating of " + page + " has failed.")
+                else:
+                    print("Rating of " + page + " is correct.")
 
     def apiget(self, parameters):
         '''All GET requests go through this method.'''
@@ -565,7 +589,7 @@ class BotSession:
     def makepagelist(self):
         '''Builds the list of pages to be processed by the calling function based on user input.'''
         pagelist = set()
-        print("Please enter a:\nPagename - to process a single non-category page\nCategory: - to process all pages in a category\n:Category: - to process a category page\nSpecial:Whatlinkshere/ - to process all pages that link to a title\nLeave last entry blank to start processing.")
+        print("\nPlease enter a:\nPagename - to process a single non-category page\nCategory: - to process all pages in a category\n:Category: - to process a category page\nSpecial:Whatlinkshere/ - to process all pages that link to a title\nLeave last entry blank to start processing.")
         while True:
             basepage = input("Entry: ")
             if basepage == "":
