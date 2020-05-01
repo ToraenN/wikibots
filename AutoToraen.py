@@ -336,11 +336,14 @@ class BotSession:
 
     def interwiki(self):
         '''Convert external links to interwiki links.'''
-        regex = { # Links to an api.php or index.php using parameters are ignored.
-            'gww:':re.compile('(\[https{0,1}://wiki\.guildwars\.com/wiki/)(?!api\.php)(?!index\.php\?.*?&.*?=).*?( .*?\])'),
-            'gw:':re.compile('(\[https{0,1}://guildwiki\.gamepedia\.com/)(?!api\.php)(?!index\.php\?.*?&.*?=).*?( .*?\])'),
-            '':re.compile('(\[https{0,1}://gwpvx\.gamepedia\.com/)(?!api\.php)(?!index\.php\?.*?&.*?=).*?( .*?\])'),
-            'scw:':re.compile('(\[https{0,1}://wiki\.fbgmguild\.com/)(?!api\.php)(?!index\.php\?.*?&.*?=).*?( .*?\])')
+        # Links to an api.php or index.php using parameters are ignored.
+        leading = '(\[https{0,1}://'
+        trailing = '/)(?!api\.php)(?!index\.php\?.*?&.*?=).*?( .*?\])'
+        regex = {
+            'gww:':re.compile(leading + 'wiki\.guildwars\.com/wiki' + trailing),
+            'gw:':re.compile(leading + 'guildwiki\.gamepedia\.com' + trailing),
+            '':re.compile(leading + 'gwpvx\.gamepedia\.com' + trailing),
+            'scw:':re.compile(leading + 'wiki\.fbgmguild\.com' + trailing)
         }
         while True:
             pagelist = self.makepagelist()
