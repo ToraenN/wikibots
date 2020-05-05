@@ -492,6 +492,10 @@ class BotSession:
         templateratefind = re.compile('{{Real-Vetting\|.*?rating=(\w*)')
         templatestatusfind = re.compile('{{Real-Vetting\|.*?status=(\w*)')
         ratefind = re.compile('Rating totals: (\d*?) votes.*?Overall.*?(\d\.\d\d)', re.DOTALL)
+        goodthreshold = 3.75
+        greatthreshold = 4.75
+        votesrequired = 5
+        provisrequired = 2
         while True:
             pagelist = self.makepagelist()
             if pagelist == None:
@@ -535,31 +539,31 @@ class BotSession:
                     rating = 0.0
                 print(page + ": " + str(ratecount) + " ratings. Overall: " + str(rating) + ". Template rating: " + templaterating + ". Status: " + templatestatus + ".")
                 
-                if ratecount >= 5: # Handle as fully vetted build
+                if ratecount >= votesrequired: # Handle as fully vetted build
                     newtext = re.sub("\|status=provisional\|", "|", newtext)
-                    if rating >= 4.75 and templaterating != "great":
+                    if rating >= greatthreshold and templaterating != "great":
                         newtext = re.sub("\|date=.*?\|", "|", newtext)
                         newtext = re.sub("\|rating=.*?\|", "|rating=great|", newtext)
-                    elif rating >= 3.75 and rating < 4.75 and templaterating != "good":
+                    elif rating >= goodthreshold and rating < greatthreshold and templaterating != "good":
                         newtext = re.sub("\|date=.*?\|", "|", newtext)
                         newtext = re.sub("\|rating=.*?\|", "|rating=good|", newtext)
-                    elif rating < 3.75 and templaterating != "trash":
+                    elif rating < goodthreshold and templaterating != "trash":
                         newtext = re.sub("\|date=.*?\|", "|", newtext)
                         newtext = re.sub("\|rating=.*?\|", "|rating=trash|date=~~~~~|", newtext)
-                elif ratecount >= 2: # Handle as provisionally vetted build (unless meta)
+                elif ratecount >= provisrequired: # Handle as provisionally vetted build (unless meta)
                     # if templaterating == "testing":
                         # if testingage < "2 weeks": # Fixme: Relies on yet to be built function
                             # continue
                     if templatestatus != "meta" and templatestatus != "provisional": # If status is validly defined, we won't overwrite/duplicate it
                         newtext = re.sub("\|status=.*?\|", "|", newtext) # Remove any invalid status if present
                         newtext = re.sub("\{\{Real-Vetting\|", "{{Real-Vetting|status=provisional|", newtext)
-                    if rating >= 4.75 and templaterating != "great":
+                    if rating >= greatthreshold and templaterating != "great":
                         newtext = re.sub("\|date=.*?\|", "|", newtext)
                         newtext = re.sub("\|rating=.*?\|", "|rating=great|", newtext)
-                    elif rating >= 3.75 and rating < 4.75 and templaterating != "good":
+                    elif rating >= goodthreshold and rating < greatthreshold and templaterating != "good":
                         newtext = re.sub("\|date=.*?\|", "|", newtext)
                         newtext = re.sub("\|rating=.*?\|", "|rating=good|", newtext)
-                    elif rating < 3.75 and templaterating != "trash":
+                    elif rating < goodthreshold and templaterating != "trash":
                         newtext = re.sub("\|date=.*?\|", "|", newtext)
                         newtext = re.sub("\|status=.*?\|", "|", newtext)
                         newtext = re.sub("\|rating=.*?\|", "|rating=trash|date=~~~~~|", newtext)
