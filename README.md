@@ -25,6 +25,9 @@ Checks that page exists on GWW or GW before converting the link. You can choose 
 # Update build ratings
 Check a build (or category of builds) to ensure its Real-Vetting template matches the real rating, and update the template if necessary.
 
+# Collect build ratings
+Outputs overall ratings and vote counts of the selected builds. Gives option to create a text file. Each line will be in the format "<build name>,<rating>,<vote count>"
+
 # Userspace moves
 Moves all of a userspaces subpages to a new name and updates links to them.
 

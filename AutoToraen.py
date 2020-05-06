@@ -19,6 +19,7 @@ def main():
     jobs.append(("Convert external links to interwiki links.", bot.interwiki)) # Convert external links to interwiki links where possible
     jobs.append(("Swap gw/gww interwiki links.", bot.wikiswap)) # Convert [[gw:]] links to [[gww:]] links or vice versa
     jobs.append(("Check accuracy of ratings.", bot.ratingcheck)) # Check the ratings of a build and update Real-Vetting tag if neccessary
+    jobs.append(("Collect rating data.", bot.ratingcollect)) # Gather overall ratings of selected builds and output them to file
     jobs.append(("Move userspace to new name.", bot.sweep)) # Userspace move
     jobs.append(("Resign user. (requires admin)", bot.resign)) # Userspace delete
     jobs.append(("Reverse deletions. (requires admin)", bot.oops)) # Reverse deletions
@@ -579,6 +580,36 @@ class BotSession:
                         print("WARNING: Attempt to update rating of " + page + " has failed.")
                 else:
                     print("Rating of " + page + " is correct.")
+
+    def ratingcollect(self):
+        '''Collect overall rating data. Then output to file.'''
+        votereader = BotSession("https://gwpvx.gamepedia.com/index.php", login = False, edit = False)
+        ratefind = re.compile('Rating totals: (\d*?) votes.*?Overall.*?(\d\.\d\d)', re.DOTALL)
+        file = inputint("Write to file?\n0: Yes\n1: No\nAnswer: ", 2)
+        while True:
+            pagelist = self.makepagelist()
+            if pagelist == None:
+                break
+            for page in pagelist:
+                
+                params_readratings = {
+                    'title':page,
+                    'action':"rate"
+                }
+            
+                response = votereader.session.get(url = votereader.url, params = params_readratings)
+                ratepage = response.text
+                ratestring = ratefind.search(ratepage)
+                if ratestring:
+                    ratecount = int(ratestring.group(1))
+                    rating = float(ratestring.group(2))
+                else: # No rating found.
+                    ratecount = 0
+                    rating = 0.0
+                print(page, "| Rating:", rating, "Votes:", ratecount)
+                if not file:
+                    with open("Build Ratings.txt", "a") as outfile:
+                        outfile.write(page + "," + str(rating) + "," + str(ratecount) + "\n")
 
     def apiget(self, parameters):
         '''All GET requests go through this method.'''
