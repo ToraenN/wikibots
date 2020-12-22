@@ -616,8 +616,11 @@ class BotSession:
         while True:
             apicall = self.session.get(url = self.url, params = parameters)
             if statuscheck(apicall):
-                break
-        result = apicall.json()
+                try:
+                    result = apicall.json()
+                    break
+                except:
+                    input("JSONDecodeError - could not parse response as JSON.\nParamaters: " + str(parameters))            
         return result
 
     def apipost(self, parameters):
@@ -625,8 +628,11 @@ class BotSession:
         while True:
             apicall = self.session.post(url = self.url, data = parameters)
             if statuscheck(apicall):
-                break
-        result = apicall.json()
+                try:
+                    result = apicall.json()
+                    break
+                except:
+                    input("JSONDecodeError - could not parse response as JSON.\nParamaters: " + str(parameters)) 
         return result
 
     def makepagelist(self):
