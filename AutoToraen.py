@@ -21,6 +21,8 @@ def main():
     jobs.append(("Check accuracy of ratings.", bot.ratingcheck)) # Check the ratings of a build and update Real-Vetting tag if neccessary
     jobs.append(("Collect rating data.", bot.ratingcollect)) # Gather overall ratings of selected builds and output them to file
     jobs.append(("Move userspace to new name.", bot.sweep)) # Userspace move
+    jobs.append(("Build cleanup list.", bot.cleanuplist)) # Creates a list of pages to be deleted (for mass cleanups)
+    jobs.append(("Execute cleanup.", bot.cleanuppurge)) # Mass deletes pages. Uses a list from the 'Build cleanup list' job
     jobs.append(("Resign user. (requires admin)", bot.resign)) # Userspace delete
     jobs.append(("Reverse deletions. (requires admin)", bot.oops)) # Reverse deletions
     jobs.append(("Change account.", bot.relog)) # Change to a different account
@@ -611,6 +613,28 @@ class BotSession:
                     with open("Build Ratings.txt", "a") as outfile:
                         outfile.write(page + "," + str(rating) + "," + str(ratecount) + "\n")
 
+    def cleanuplist(self):
+        # Check for existing exclusion list (text file containing regex strings)
+        #   Allow entry for new exclusion list if none found
+        # Query for settings (namespace, link tolerance maybe)
+        # Get namespace pagelist
+        # For each page:
+        #   Check against exclusion list
+        #   Check for whatlinkshere/whatembedsthis in:
+        #       Other namespaces
+        #       The exclusion list
+        #   Add to final purge list if all checks come back empty
+        #   Add to excluded pages list with reason(s) if checks found something
+        pass
+    
+    def cleanuppurge(self):
+        # Check for existing purge list
+        #   If no purge list, exit job
+        # For each page:
+        #   Delete page - default reason: "Mass cleanup" (but user should enter detailed reason linking to project)
+        #   Nothing else should be needed, as all pages that would still be linked to should not have been added to the purge list
+        pass
+
     def apiget(self, parameters):
         '''All GET requests go through this method.'''
         while True:
@@ -788,10 +812,11 @@ class BotSession:
         
         editcommit = self.apipost(params_editpage)
         try:
-            status = editcommit['edit']['result']
-            if status == 'Success':
+            status = editcommit['edit']
+            if status['result'] == 'Success':
                 return True
             else:
+                print(status) # Ugly print all the error information; may be in non-standard format so parsing it out may not be viable without knowing all possible permutations.
                 raise KeyError
         except KeyError:
             return False
