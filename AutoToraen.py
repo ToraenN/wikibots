@@ -133,7 +133,7 @@ def refreshtimestamp():
 
 class BotSession:
     '''All functions that require the session's variables are methods of this class.'''
-    def __init__(self, url = "https://gwpvx.gamepedia.com/api.php", login = True, edit = True):
+    def __init__(self, url = "https://gwpvx.fandom.com/api.php", login = True, edit = True):
         self.url = url
         self.session = requests.Session()
         if login:
@@ -344,8 +344,8 @@ class BotSession:
         trailing = '/)(?!api\.php)(?!index\.php\?.*?&.*?=).*?( .*?\])'
         regex = {
             'gww:':re.compile(leading + 'wiki\.guildwars\.com/wiki' + trailing),
-            'gw:':re.compile(leading + 'guildwiki\.gamepedia\.com' + trailing),
-            '':re.compile(leading + 'gwpvx\.gamepedia\.com' + trailing),
+            'gw:':re.compile(leading + 'guildwiki\.fandom\.com' + trailing),
+            '':re.compile(leading + 'gwpvx\.fandom\.com' + trailing),
             'scw:':re.compile(leading + 'wiki\.fbgmguild\.com' + trailing)
         }
         while True:
@@ -385,7 +385,7 @@ class BotSession:
         elif subid == 1:
             source = "Guild Wars Wiki"
             target = "Guildwiki"
-            url = "https://guildwiki.gamepedia.com/api.php"
+            url = "https://guildwiki.fandom.com/api.php"
             regexprefix = '\[+[Gg][Ww][Ww]:'
             replaceprefix = '[[gw:'
         message = "\nConvert all possible links?\n0: Yes.\n1: Let me pick for each link.\nChoose a number: "
@@ -491,7 +491,7 @@ class BotSession:
 
     def ratingcheck(self):
         '''View the rating page of a build and find the overall rating. Then update the displayed rating.'''
-        votereader = BotSession("https://gwpvx.gamepedia.com/index.php", login = False, edit = False)
+        votereader = BotSession("https://gwpvx.fandom.com/index.php", login = False, edit = False)
         templateratefind = re.compile('{{Real-Vetting\|.*?rating=(\w*)')
         templatestatusfind = re.compile('{{Real-Vetting\|.*?status=(\w*)')
         ratefind = re.compile('Rating totals: (\d*?) votes.*?Overall.*?(\d\.\d\d)', re.DOTALL)
@@ -585,7 +585,7 @@ class BotSession:
 
     def ratingcollect(self):
         '''Collect overall rating data. Then output to file.'''
-        votereader = BotSession("https://gwpvx.gamepedia.com/index.php", login = False, edit = False)
+        votereader = BotSession("https://gwpvx.fandom.com/index.php", login = False, edit = False)
         ratefind = re.compile('Rating totals: (\d*?) votes.*?Overall.*?(\d\.\d\d)', re.DOTALL)
         file = inputint("Write to file?\n0: Yes\n1: No\nAnswer: ", 2)
         while True:
