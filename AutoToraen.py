@@ -570,9 +570,11 @@ class BotSession:
                     elif rating >= goodthreshold and rating < greatthreshold and templaterating != "good":
                         newtext = re.sub("\|date=.*?\|", "|", newtext)
                         newtext = re.sub("\|rating=.*?\|", "|rating=good|", newtext)
-                    elif rating < goodthreshold and templaterating != "trash":
-                        newtext = re.sub("\|date=.*?\|", "|", newtext)
-                        newtext = re.sub("\|rating=.*?\|", "|rating=trash|date=~~~~~|", newtext)
+                    elif rating < goodthreshold:
+                        newtext = re.sub("\|status=.*?\|", "|", newtext) # Per policy, trash rating removes any status parameter
+                        if templaterating != "trash": # Only change date and rating parameters if Trash rating not already present
+                            newtext = re.sub("\|date=.*?\|", "|", newtext)
+                            newtext = re.sub("\|rating=.*?\|", "|rating=trash|date=~~~~~|", newtext)
                 else: # Revert to testing if rating has been erroneously applied
                     newtext = re.sub("\|date=.*?\|", "|", newtext)
                     newtext = re.sub("\|status=provisional\|", "|", newtext)
