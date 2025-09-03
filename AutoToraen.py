@@ -572,7 +572,6 @@ class BotSession:
                         newtext = re.sub("\|rating=.*?\|", "|rating=good|", newtext)
                     elif rating < goodthreshold and templaterating != "trash":
                         newtext = re.sub("\|date=.*?\|", "|", newtext)
-                        newtext = re.sub("\|status=.*?\|", "|", newtext)
                         newtext = re.sub("\|rating=.*?\|", "|rating=trash|date=~~~~~|", newtext)
                 else: # Revert to testing if rating has been erroneously applied
                     newtext = re.sub("\|date=.*?\|", "|", newtext)
