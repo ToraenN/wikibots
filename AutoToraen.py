@@ -610,8 +610,12 @@ class BotSession:
                     ratecount = int(ratestring.group(1))
                     rating = float(ratestring.group(2))
                 else: # No rating found.
-                    ratecount = 0
-                    rating = 0.0
+                    if "Read-only mode: You are currently not logged in." in ratepage: #Check if the rate page actually loaded, the rating reader function is not logged in so this message will appear at the top if we reached the rate page.
+                        ratecount = 0
+                        rating = 0.0
+                    else:
+                        ratecount = None
+                        rating = None
                 print(page, "| Rating:", rating, "Votes:", ratecount)
                 with open("Build Ratings.txt", "a") as outfile:
                     outfile.write(page + "," + str(rating) + "," + str(ratecount) + "\n")
