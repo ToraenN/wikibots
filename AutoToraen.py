@@ -592,7 +592,6 @@ class BotSession:
         '''Collect overall rating data. Then output to file.'''
         votereader = BotSession("https://gwpvx.fandom.com/index.php", login = False, edit = False)
         ratefind = re.compile('Rating totals: (\d*?) votes.*?Overall.*?(\d\.\d\d)', re.DOTALL)
-        file = inputint("Write to file?\n0: Yes\n1: No\nAnswer: ", 2)
         while True:
             pagelist = self.makepagelist()
             if pagelist == None:
@@ -614,9 +613,8 @@ class BotSession:
                     ratecount = 0
                     rating = 0.0
                 print(page, "| Rating:", rating, "Votes:", ratecount)
-                if not file:
-                    with open("Build Ratings.txt", "a") as outfile:
-                        outfile.write(page + "," + str(rating) + "," + str(ratecount) + "\n")
+                with open("Build Ratings.txt", "a") as outfile:
+                    outfile.write(page + "," + str(rating) + "," + str(ratecount) + "\n")
 
     def cleanuplist(self):
         # Check for existing exclusion list (text file containing regex strings)
