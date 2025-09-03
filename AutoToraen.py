@@ -21,8 +21,8 @@ def main():
     jobs.append(("Check accuracy of ratings.", bot.ratingcheck)) # Check the ratings of a build and update Real-Vetting tag if neccessary
     jobs.append(("Collect rating data.", bot.ratingcollect)) # Gather overall ratings of selected builds and output them to file
     jobs.append(("Move userspace to new name.", bot.sweep)) # Userspace move
-    jobs.append(("Build cleanup list.", bot.cleanuplist)) # Creates a list of pages to be deleted (for mass cleanups)
-    jobs.append(("Execute cleanup.", bot.cleanuppurge)) # Mass deletes pages. Uses a list from the 'Build cleanup list' job
+    # jobs.append(("Build cleanup list.", bot.cleanuplist)) # Creates a list of pages to be deleted (for mass cleanups)
+    # jobs.append(("Execute cleanup.", bot.cleanuppurge)) # Mass deletes pages. Uses a list from the 'Build cleanup list' job
     jobs.append(("Resign user. (requires admin)", bot.resign)) # Userspace delete
     jobs.append(("Reverse deletions. (requires admin)", bot.oops)) # Reverse deletions
     jobs.append(("Change account.", bot.relog)) # Change to a different account
@@ -538,8 +538,12 @@ class BotSession:
                     ratecount = int(ratestring.group(1))
                     rating = float(ratestring.group(2))
                 else: # No rating found.
-                    ratecount = 0
-                    rating = 0.0
+                    if "Read-only mode: You are currently not logged in." in ratepage: #Check if the rate page actually loaded, the rating reader function is not logged in so this message will appear at the top if we reached the rate page.
+                        ratecount = 0
+                        rating = 0.0
+                    else:
+                        print(page + ": unable to view rating page. Skipping build.")
+                        continue
                 print(page + ": " + str(ratecount) + " ratings. Overall: " + str(rating) + ". Template rating: " + templaterating + ". Status: " + templatestatus + ".")
                 
                 if ratecount >= votesrequired: # Handle as fully vetted build
@@ -833,7 +837,7 @@ class BotSession:
                 except:
                     raise KeyError
         except KeyError:
-            print(status) # Ugly print all the status information; unknown error type but at least we'll inform the user
+            print(editcommit) # Ugly print all the status information; unknown error type but at least we'll inform the user
             return False
 
     def movepage(self, oldpage, newpage, regexdict): # FIXME: Adjust to move subpages+talk
