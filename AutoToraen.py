@@ -9,36 +9,37 @@ from datetime import datetime, date, time
 from time import sleep
 
 def main():
-    # Initial login
-    bot = BotSession()
-    # Build the job listing
-    jobs = []
-    jobs.append(("Find and replace.", bot.typo)) # Perform find/replace operations
-    jobs.append(("Update links to moved/deleted pages.", bot.mplf)) # Link fixing
-    jobs.append(("Convert subpage links.", bot.sublinker)) # Change absolute links to subpages into relative links, or vice versa
-    jobs.append(("Convert external links to interwiki links.", bot.interwiki)) # Convert external links to interwiki links where possible
-    jobs.append(("Swap gw/gww interwiki links.", bot.wikiswap)) # Convert [[gw:]] links to [[gww:]] links or vice versa
-    jobs.append(("Check accuracy of ratings.", bot.ratingcheck)) # Check the ratings of a build and update Real-Vetting tag if neccessary
-    jobs.append(("Collect rating data.", bot.ratingcollect)) # Gather overall ratings of selected builds and output them to file
-    jobs.append(("Move userspace to new name.", bot.sweep)) # Userspace move
-    # jobs.append(("Build cleanup list.", bot.cleanuplist)) # Creates a list of pages to be deleted (for mass cleanups)
-    # jobs.append(("Execute cleanup.", bot.cleanuppurge)) # Mass deletes pages. Uses a list from the 'Build cleanup list' job
-    jobs.append(("Resign user. (requires admin)", bot.resign)) # Userspace delete
-    jobs.append(("Reverse deletions. (requires admin)", bot.oops)) # Reverse deletions
-    jobs.append(("Change account.", bot.relog)) # Change to a different account
-    jobs.append(("Logout.", bot.exit)) # Exit script
-    message = "\nWhat would you like to do?"
-    for job in jobs:
-        jobmessage = job[0]
-        message += "\n" + str(jobs.index(job)) + ": " + jobmessage
-    message += "\nChoose the number of your job: "
-    # Prompt user for selection, loop so that we can do multiple things without having to re-launch
+    # Loops so that we can do multiple things without having to re-launch
     while True:
-        if bot.loggedin != "Success": # If we selected to change account or previous login failed, bring up login prompt again
-            bot = BotSession()
-            continue
-        jobid = inputint(message, len(jobs))
-        ((jobs[jobid])[1])() # Run the selected job.
+        bot = BotSession()
+        while bot.loggedin:
+            # Build the job listing
+            jobs = []
+            if "edit" in bot.rights:
+                jobs.append(("Find and replace.", bot.typo)) # Perform find/replace operations
+                jobs.append(("Update links to moved/deleted pages.", bot.mplf)) # Link fixing
+                jobs.append(("Convert subpage links.", bot.sublinker)) # Change absolute links to subpages into relative links, or vice versa
+                jobs.append(("Convert external links to interwiki links.", bot.interwiki)) # Convert external links to interwiki links where possible
+                jobs.append(("Swap gw/gww interwiki links.", bot.wikiswap)) # Convert [[gw:]] links to [[gww:]] links or vice versa
+                jobs.append(("Check build ratings and update Real-Vetting tags.", bot.ratingcheck)) # Check the ratings of a build and update Real-Vetting tag if neccessary
+            jobs.append(("Collect rating data.", bot.ratingcollect)) # Gather overall ratings of selected builds and output them to file
+            if "move" in bot.rights:
+                jobs.append(("Move userspace to new name.", bot.sweep)) # Userspace move
+            if "delete" in bot.rights:
+                jobs.append(("Build cleanup list.", bot.cleanuplist)) # Creates a list of pages to be deleted (for mass cleanups)
+                jobs.append(("Execute cleanup.", bot.cleanuppurge)) # Mass deletes pages. Uses a list from the 'Build cleanup list' job
+                jobs.append(("Resign user.", bot.resign)) # Userspace delete
+            if "undelete" in bot.rights:
+                jobs.append(("Reverse deletions.", bot.oops)) # Reverse deletions
+            jobs.append(("Change account.", bot.relog)) # Change to a different account
+            jobs.append(("Logout.", bot.exit)) # Exit script
+            message = "\nWhat would you like to do?"
+            for job in jobs:
+                jobmessage = job[0]
+                message += "\n" + str(jobs.index(job)) + ": " + jobmessage
+            message += "\nChoose the number of your job: "
+            jobid = inputint(message, len(jobs))
+            ((jobs[jobid])[1])() # Run the selected job.
 
 def statuscheck(apicall):
     '''Checks for an HTTP error response.'''
@@ -165,9 +166,27 @@ class BotSession:
             
             self.loggedin = self.apipost(params_login)['login']['result']
             print("Login " + self.loggedin + "!")
-            del logintoken, params_login, username, password
+            
+            # Get our list of user rights
+            username = re.sub("@.*","", username) #need to remove the bot account login tag
+            params_rights = {
+                'action':"query",
+                'list':"users",
+                'ususers':username,
+                'usprop':"rights",
+                'format':"json"
+            }
+            userinfo = self.apiget(params_rights)['query']['users'][0]
+            self.rights = userinfo['rights']
+            self.userid = userinfo['userid']
+            self.username = userinfo['name']
+            
+            del logintoken, params_login, params_rights, username, password
             if self.loggedin != 'Success':
-                print("Login failed. Please ensure login details are correct.")
+                print("Please ensure login details are correct.")
+                self.loggedin = False
+            else:
+                self.loggedin = True
             
         # Get an edit token
         if edit:
@@ -177,8 +196,10 @@ class BotSession:
                 'format':"json",
                 'assert':"bot"
             }
-            
-            self.csrftoken = self.apipost(params_csrftoken)['query']['tokens']['csrftoken']
+            try:
+                self.csrftoken = self.apipost(params_csrftoken)['query']['tokens']['csrftoken']
+            except:
+                self.csrftoken = ""
         else:
             self.csrftoken = ""
     
@@ -592,7 +613,6 @@ class BotSession:
         '''Collect overall rating data. Then output to file.'''
         votereader = BotSession("https://gwpvx.fandom.com/index.php", login = False, edit = False)
         ratefind = re.compile('Rating totals: (\d*?) votes.*?Overall.*?(\d\.\d\d)', re.DOTALL)
-        file = inputint("Write to file?\n0: Yes\n1: No\nAnswer: ", 2)
         while True:
             pagelist = self.makepagelist()
             if pagelist == None:
@@ -611,12 +631,15 @@ class BotSession:
                     ratecount = int(ratestring.group(1))
                     rating = float(ratestring.group(2))
                 else: # No rating found.
-                    ratecount = 0
-                    rating = 0.0
+                    if "Read-only mode: You are currently not logged in." in ratepage: #Check if the rate page actually loaded, the rating reader function is not logged in so this message will appear at the top if we reached the rate page.
+                        ratecount = 0
+                        rating = 0.0
+                    else:
+                        ratecount = None
+                        rating = None
                 print(page, "| Rating:", rating, "Votes:", ratecount)
-                if not file:
-                    with open("Build Ratings.txt", "a") as outfile:
-                        outfile.write(page + "," + str(rating) + "," + str(ratecount) + "\n")
+                with open("Build Ratings.txt", "a") as outfile:
+                    outfile.write(page + "," + str(rating) + "," + str(ratecount) + "\n")
 
     def cleanuplist(self):
         # Check for existing exclusion list (text file containing regex strings)
@@ -1097,6 +1120,7 @@ class BotSession:
             'format':"json",
             'assert':"bot"
         }
+        self.loggedin = False
         
         self.apipost(params_logout)
         print("Logged out.")
