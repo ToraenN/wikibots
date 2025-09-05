@@ -53,14 +53,14 @@ def statuscheck(apicall):
         else:
             raise SystemExit()
 
-def inputint(prompt, limit):
+def inputint(prompt, limit, minimum = 0):
     '''Used for any prompt that has you pick from a list.'''
     answer = input(prompt)
     try:
         answer = int(answer)
     except:
         pass
-    while (isinstance(answer, int) == False) or (int(answer) not in range(limit)):
+    while (isinstance(answer, int) == False) or (int(answer) not in range(minimum, limit)):
         try:
             answer = int(input('Invalid entry, please enter an integer within range: '))
         except ValueError:
@@ -242,11 +242,7 @@ class BotSession:
         if subjobid == 2:
             # Check the move log for new moves periodically
             timestamp = refreshtimestamp()
-            waittime = inputint("How many minutes would you like to wait between checks? (1-60 minutes): ", 61)
-            if waittime < 1:
-                waittime = 60
-            else:
-                waittime *= 60
+            waittime = inputint("How many minutes would you like to wait between checks? (1-60 minutes): ", 61, 1) * 60
             print("Press Ctrl+C to stop listening.")
             try:
                 while True:
@@ -255,8 +251,15 @@ class BotSession:
                     moveentries = self.checklog('move', timestamp = timestamp)
                     deleteentries = self.checklog('delete', timestamp = timestamp)
                     logentries = moveentries + deleteentries
+                    year = timestamp[0] + timestamp[1] + timestamp[2] + timestamp[3]
+                    month = timestamp[4] + timestamp[5]
+                    day = timestamp[6] + timestamp[7]
+                    hour = timestamp[8] + timestamp[9]
+                    minute = timestamp[10] + timestamp[11]
+                    second = timestamp[12] + timestamp[13]
+                    readabletime = year + "-" + month + "-" + day + " " + hour + ":" + minute + ":" + second
                     if len(logentries) == 0:
-                        print("No moves or deletions detected since " + timestamp + "!")
+                        print("No moves or deletions detected since " + readabletime + " (UTC)!")
                     movelist, titlelist = self.parselogentries(logentries)
                     regexdict = self.finddestinations(movelist, timestamp = timestamp, prompt = False)
                     for title in titlelist:
