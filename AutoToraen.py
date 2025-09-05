@@ -839,30 +839,44 @@ class BotSession:
         }
         
         editcommit = self.apipost(params_editpage)
-        try:
+        if 'edit' in editcommit:
             status = editcommit['edit']
             if status['result'] == 'Success':
                 return True
-            else: # Various error handling as they are identified
+            if 'phalanx' in status:
+                cleanedpagetext = spamfilterhandling(status['phalanx'], pagetext)
                 try:
-                    if status['phalanx']:
-                        spamregex = re.compile("The following link, text or pagename is what triggered our spam filter: <b>(.*?)<\/b>")
-                        spamsnip = re.search(spamregex, status['phalanx'])[1]
-                        userchoice = input("The following text in the page triggered the spam filter and is preventing the edit:\n" + spamsnip + "\nWould you like to remove this text and complete the edit (y/n)? ")
-                        if "y" in userchoice:
-                            unspampagetext = pagetext.replace(spamsnip, " (removed due to spam filter)")
-                            unspamedit = self.editpage(page, unspampagetext, reason)
-                            if unspamedit:
-                                return True
-                        else:
-                            return False # Don't need error printed in this case, user decided not to censor
-                    else:
-                        raise KeyError
+                    params_editpage['text'] = cleanedpagetext
+                    editcommit = self.apipost(params_editpage)
+                    if editcommit['edit']['status'] == 'Success':
+                        return True
                 except:
-                    raise KeyError
-        except KeyError:
-            print(editcommit) # Ugly print all the status information; unknown error type but at least we'll inform the user
+                    print("Phalanx filter adjustment failed.")
+                    return False
+        elif 'error' in editcommit:
+            if 'info' in editcommit['error']:
+                cleanedpagetext = spamfilterhandling(editcommit['error']['info'], pagetext)
+                try:
+                    params_editpage['text'] = cleanedpagetext
+                    editcommit = self.apipost(params_editpage)
+                    if editcommit['edit']['status'] == 'Success':
+                        return True
+                except:
+                    print("Spam filter adjustment failed.")
+                    return False
+            print(editcommit['error']['info'])
             return False
+
+    def spamfilterhandling(self, errortext, pagetext):
+        phalanxregex = re.compile("The following link, text or pagename is what triggered our spam filter: <b>(.*?)<\/b>")
+        offendingphalanxtext = re.search(phalanxregex, errortext)[1]
+        spamregex = re.compile('please submit the page without the term \"(.*?)\"')
+        offendingspamtext = re.search(spamregex, errortext)[1]
+        
+        cleanedpagetext = pagetext
+        cleanedpagetext = unspampagetext.replace(offendingphalanxtext, " (removed due to phalanx filter)")
+        cleanedpagetext = unspampagetext.replace(offendingspamtext, " (removed due to spam filter)")
+        return cleanedpagetext
 
     def movepage(self, oldpage, newpage, regexdict): # FIXME: Adjust to move subpages+talk
         '''Move a page to a new title.'''
