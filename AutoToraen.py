@@ -9,40 +9,37 @@ from datetime import datetime, date, time
 from time import sleep
 
 def main():
-    # Initial login
-    bot = BotSession()
-    # Build the job listing
-    jobs = []
-    if "edit" in bot.rights:
-        jobs.append(("Find and replace.", bot.typo)) # Perform find/replace operations
-        jobs.append(("Update links to moved/deleted pages.", bot.mplf)) # Link fixing
-        jobs.append(("Convert subpage links.", bot.sublinker)) # Change absolute links to subpages into relative links, or vice versa
-        jobs.append(("Convert external links to interwiki links.", bot.interwiki)) # Convert external links to interwiki links where possible
-        jobs.append(("Swap gw/gww interwiki links.", bot.wikiswap)) # Convert [[gw:]] links to [[gww:]] links or vice versa
-        jobs.append(("Check build ratings and update Real-Vetting tags.", bot.ratingcheck)) # Check the ratings of a build and update Real-Vetting tag if neccessary
-    jobs.append(("Collect rating data.", bot.ratingcollect)) # Gather overall ratings of selected builds and output them to file
-    if "move" in bot.rights:
-        jobs.append(("Move userspace to new name.", bot.sweep)) # Userspace move
-    if "delete" in bot.rights:
-        jobs.append(("Build cleanup list.", bot.cleanuplist)) # Creates a list of pages to be deleted (for mass cleanups)
-        jobs.append(("Execute cleanup.", bot.cleanuppurge)) # Mass deletes pages. Uses a list from the 'Build cleanup list' job
-        jobs.append(("Resign user.", bot.resign)) # Userspace delete
-    if "undelete" in bot.rights:
-        jobs.append(("Reverse deletions.", bot.oops)) # Reverse deletions
-    jobs.append(("Change account.", bot.relog)) # Change to a different account
-    jobs.append(("Logout.", bot.exit)) # Exit script
-    message = "\nWhat would you like to do?"
-    for job in jobs:
-        jobmessage = job[0]
-        message += "\n" + str(jobs.index(job)) + ": " + jobmessage
-    message += "\nChoose the number of your job: "
-    # Prompt user for selection, loop so that we can do multiple things without having to re-launch
+    # Loops so that we can do multiple things without having to re-launch
     while True:
-        if bot.loggedin != "Success": # If we selected to change account or previous login failed, bring up login prompt again
-            bot = BotSession()
-            continue
-        jobid = inputint(message, len(jobs))
-        ((jobs[jobid])[1])() # Run the selected job.
+        bot = BotSession()
+        while bot.loggedin:
+            # Build the job listing
+            jobs = []
+            if "edit" in bot.rights:
+                jobs.append(("Find and replace.", bot.typo)) # Perform find/replace operations
+                jobs.append(("Update links to moved/deleted pages.", bot.mplf)) # Link fixing
+                jobs.append(("Convert subpage links.", bot.sublinker)) # Change absolute links to subpages into relative links, or vice versa
+                jobs.append(("Convert external links to interwiki links.", bot.interwiki)) # Convert external links to interwiki links where possible
+                jobs.append(("Swap gw/gww interwiki links.", bot.wikiswap)) # Convert [[gw:]] links to [[gww:]] links or vice versa
+                jobs.append(("Check build ratings and update Real-Vetting tags.", bot.ratingcheck)) # Check the ratings of a build and update Real-Vetting tag if neccessary
+            jobs.append(("Collect rating data.", bot.ratingcollect)) # Gather overall ratings of selected builds and output them to file
+            if "move" in bot.rights:
+                jobs.append(("Move userspace to new name.", bot.sweep)) # Userspace move
+            if "delete" in bot.rights:
+                jobs.append(("Build cleanup list.", bot.cleanuplist)) # Creates a list of pages to be deleted (for mass cleanups)
+                jobs.append(("Execute cleanup.", bot.cleanuppurge)) # Mass deletes pages. Uses a list from the 'Build cleanup list' job
+                jobs.append(("Resign user.", bot.resign)) # Userspace delete
+            if "undelete" in bot.rights:
+                jobs.append(("Reverse deletions.", bot.oops)) # Reverse deletions
+            jobs.append(("Change account.", bot.relog)) # Change to a different account
+            jobs.append(("Logout.", bot.exit)) # Exit script
+            message = "\nWhat would you like to do?"
+            for job in jobs:
+                jobmessage = job[0]
+                message += "\n" + str(jobs.index(job)) + ": " + jobmessage
+            message += "\nChoose the number of your job: "
+            jobid = inputint(message, len(jobs))
+            ((jobs[jobid])[1])() # Run the selected job.
 
 def statuscheck(apicall):
     '''Checks for an HTTP error response.'''
@@ -187,6 +184,9 @@ class BotSession:
             del logintoken, params_login, params_rights, username, password
             if self.loggedin != 'Success':
                 print("Please ensure login details are correct.")
+                self.loggedin = False
+            else:
+                self.loggedin = True
             
         # Get an edit token
         if edit:
@@ -1120,6 +1120,7 @@ class BotSession:
             'format':"json",
             'assert':"bot"
         }
+        self.loggedin = False
         
         self.apipost(params_logout)
         print("Logged out.")
