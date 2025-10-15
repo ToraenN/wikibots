@@ -26,8 +26,6 @@ def main():
             if "move" in bot.rights:
                 jobs.append(("Move userspace to new name.", bot.sweep)) # Userspace move
             if "delete" in bot.rights:
-                jobs.append(("Build cleanup list.", bot.cleanuplist)) # Creates a list of pages to be deleted (for mass cleanups)
-                jobs.append(("Execute cleanup.", bot.cleanuppurge)) # Mass deletes pages. Uses a list from the 'Build cleanup list' job
                 jobs.append(("Resign user.", bot.resign)) # Userspace delete
             if "undelete" in bot.rights:
                 jobs.append(("Reverse deletions.", bot.oops)) # Reverse deletions
@@ -92,32 +90,6 @@ def regexbuild(source, destination):
         replace1 = "{{LogLink|" + source + "{pipedtext}}}"
         replace2 = "{{LogLink|" + source + "}}"
     srpairs = [regex1, replace1, regex2, replace2]
-    regexes = {source:srpairs}
-    return regexes
-
-def regexbuildrewrite(source, destination): # FIXME
-    '''Build the regexes for finding links/templates to update.'''
-    parsedsource = source.replace("\\","\\\\").replace("(","\(").replace(")","\)").replace(" ", "[_ ]").replace(":", "(?:%3A|:)[_ ]{0,1}").replace("'", "(?:%27|')") # People sure are creative in linking in weird ways
-    templatesource = source.replace("\\","\\\\").replace("(","\(").replace(")","\)").replace(":", "\|").replace("'", "(%27|')").replace(" ", "[_ ]") # For {{Build}}
-    # FIXME: remove re.I, replace with specific case insensitive positions in regex (start of namespace & start of title)
-    regexsource1 = "\[\[" + parsedsource + "[_ ]{0,1}[^ -~]{0,}(#.*?){0,1}(\|.*?){0,1}\]\]"
-    regex1 = re.compile(regexsource1) # This covers most wikilinks
-    regexsource2 = "\{\{" + templatesource + "[_ ]{0,1}[^ -~]{0,}\}\}"
-    regex2 = re.compile(regexsource2) # This one is for the {{Build}} template used for the admin noticeboard/user talks
-
-    if destination:
-        # Build the replace strings
-        replace1 = "[[" + destination + "{sectiontext}" + "{pipedtext}" + "]]"
-        # If the destination is not another Build: namespace article, the {{Build}} template needs to be replaced with a link
-        if re.search("^Build:", destination) != None:
-            replace2 = "{{" + destination.replace(":", "|") + "}}"
-        else:
-            replace2 = "[[" + destination + "]]"
-    else:
-        # Build the replace strings
-        replace1 = "{{LogLink|" + source + "{pipedtext}}}"
-        replace2 = "{{LogLink|" + source + "}}"
-    srpairs = [(regex1, replace1), (regex2, replace2)]
     regexes = {source:srpairs}
     return regexes
 
@@ -644,28 +616,6 @@ class BotSession:
                 with open("Build Ratings.txt", "a") as outfile:
                     outfile.write(page + "," + str(rating) + "," + str(ratecount) + "\n")
 
-    def cleanuplist(self):
-        # Check for existing exclusion list (text file containing regex strings)
-        #   Allow entry for new exclusion list if none found
-        # Query for settings (namespace, link tolerance maybe)
-        # Get namespace pagelist
-        # For each page:
-        #   Check against exclusion list
-        #   Check for whatlinkshere/whatembedsthis in:
-        #       Other namespaces
-        #       The exclusion list
-        #   Add to final purge list if all checks come back empty
-        #   Add to excluded pages list with reason(s) if checks found something
-        pass
-    
-    def cleanuppurge(self):
-        # Check for existing purge list
-        #   If no purge list, exit job
-        # For each page:
-        #   Delete page - default reason: "Mass cleanup" (but user should enter detailed reason linking to project)
-        #   Nothing else should be needed, as all pages that would still be linked to should not have been added to the purge list
-        pass
-
     def apiget(self, parameters):
         '''All GET requests go through this method.'''
         while True:
@@ -973,26 +923,6 @@ class BotSession:
             print("No changes made to " + page + ". Broken links not identified.") # Caused by templates/link formats the script does not yet account for
             return
         status = self.editpage(page, newpagetext, "Updating links.")
-        if status:
-            print("Links on '" + page + "' updated.")
-        else:
-            print("WARNING: Success message not received for '" + page + "'!")
-
-    def updatelinksrewrite(self, page, regexdict):
-        '''Update links of moved pages.'''
-        pagetext = self.readpage(page)
-        newpagetext = pagetext
-        for source, srpairs in regexdict.items():
-            for pair in srpairs:
-                pass # FIXME
-            if page in source:
-                sublink = re.sub("^" + page, "", source)
-                regexsublink = re.compile("\[\[" + sublink.replace(" ", "[_ ]").replace(":", "(?:%3A|:)[_ ]{0,1}").replace("'", "(?:%27|')") + "[_ ]{0,1}(?=[\]\|#])", re.I)
-                newpagetext = re.sub(regexsublink, srpairs[1], newpagetext) # FIXME: srpairs is not the correct thing to call here
-        if newpagetext == pagetext:
-            print("No changes made to " + page + ". Broken links not identified.") # Caused by templates/link formats the script does not yet account for
-            return
-        status = self.editpage(page, newpagetext, "Updating links of moved pages")
         if status:
             print("Links on '" + page + "' updated.")
         else:
