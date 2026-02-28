@@ -709,6 +709,8 @@ class BotSession:
             elif re.match(r'Special:WhatLinksHere\/', basepage):
                 page = basepage.replace('Special:WhatLinksHere/','')
                 pagelist.update(set(self.whatlinkshere(page)))
+            elif re.match(r'Special:AllPages\/', basepage): #Expand this branch as needed
+                pagelist.update(set(self.getallpages(basepage)))
             elif self.pageexist(basepage):
                 pagelist.add(basepage)
             else:
@@ -717,6 +719,13 @@ class BotSession:
             return None
         else:
             return pagelist
+
+    def getallpages(self, namespace):
+        '''Retrieve all non-category members of a namespace.'''
+        params_allpages = {
+            'action':"query", #determine remaining parameters
+        }
+        return
 
     def getcategory(self, category):
         '''Retrieve all non-category members of a category.'''
