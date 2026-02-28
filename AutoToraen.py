@@ -15,6 +15,7 @@ def main():
         while bot.loggedin:
             # Build the job listing
             jobs = []
+            jobs.append(("Test age in category function."), bot.ageincategorytest))
             if "edit" in bot.rights:
                 jobs.append(("Find and replace.", bot.typo)) # Perform find/replace operations
                 jobs.append(("Update links to moved/deleted pages.", bot.mplf)) # Link fixing
@@ -818,7 +819,22 @@ class BotSession:
             return False #Page does not exist
         except KeyError:
             return True #Page exists
+    
+    def ageincategorytest(self):
+        pagename = input("Page name: ")
+        categoryname = input("Category: ")
+        
 
+    def ageincategory(self, pagename, categoryname):
+        '''Get the timestamp of when a page was added to a category, and return it and/or how long ago that was.'''
+        params_categoryage = {
+            'prop':"categories"
+            'titles':pagename
+            'clprop':"timestamp"
+            'cllimit':"max"
+            'format':"json"
+        }
+        
     def isredirect(self, page):
         '''Check if the supplied page is a redirect.'''
         text = self.readpage(page)
