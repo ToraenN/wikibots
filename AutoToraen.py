@@ -5,7 +5,7 @@
 import re
 import requests
 from getpass import getpass
-from datetime import datetime, date, time
+from datetime import datetime, date, time, timedelta
 from time import sleep
 
 def main():
@@ -15,7 +15,7 @@ def main():
         while bot.loggedin:
             # Build the job listing
             jobs = []
-            jobs.append(("Test age in category function."), bot.ageincategorytest))
+            jobs.append(("Test age in category function.", bot.ageincategorytest))
             if "edit" in bot.rights:
                 jobs.append(("Find and replace.", bot.typo)) # Perform find/replace operations
                 jobs.append(("Update links to moved/deleted pages.", bot.mplf)) # Link fixing
@@ -496,6 +496,7 @@ class BotSession:
         greatthreshold = 4.75
         votesrequired = 5
         provisrequired = 2
+        provisagethreshold = timedelta(days=14)
         while True:
             pagelist = self.makepagelist()
             if pagelist == None:
@@ -521,8 +522,11 @@ class BotSession:
                     print(page + ": page is not eligible for rating.")
                     continue # Skip pages that don't need evaluation
                 elif templaterating == "testing":
-                    testingage = False # Fixme: write function for determining age in testing category
-                
+                    testingtimestamp = self.ageincategory(page, 'Category:Testing')
+                    testingdaystimestamp = (testingtimestamp.split('T'))[0]
+                    testingdate = date.fromisoformat(testingdaystimestamp)
+                    todaydate = date.today()
+                    testingage = todaydate - testingdate
                 params_readratings = {
                     'title':page,
                     'action':"rate"
@@ -555,9 +559,9 @@ class BotSession:
                         newtext = re.sub("\|date=.*?\|", "|", newtext)
                         newtext = re.sub("\|rating=.*?\|", "|rating=trash|date=~~~~~|", newtext)
                 elif ratecount >= provisrequired: # Handle as provisionally vetted build (unless meta)
-                    # if templaterating == "testing":
-                        # if testingage < "2 weeks": # Fixme: Relies on yet to be built function
-                            # continue
+                    if templaterating == "testing" and testingage < provisagethreshold:
+                        print(page + ": page meets provisional vote threshold, but was not in testing long enough for rating.")
+                        continue
                     if templatestatus != "meta" and templatestatus != "provisional": # If status is validly defined, we won't overwrite/duplicate it
                         newtext = re.sub("\|status=.*?\|", "|", newtext) # Remove any invalid status if present
                         newtext = re.sub("\{\{Real-Vetting\|", "{{Real-Vetting|status=provisional|", newtext)
@@ -769,22 +773,33 @@ class BotSession:
             return False #Page does not exist
         except KeyError:
             return True #Page exists
-    
-    def ageincategorytest(self):
-        pagename = input("Page name: ")
-        categoryname = input("Category: ")
-        
 
     def ageincategory(self, pagename, categoryname):
         '''Get the timestamp of when a page was added to a category, and return it and/or how long ago that was.'''
         params_categoryage = {
-            'prop':"categories"
-            'titles':pagename
-            'clprop':"timestamp"
-            'cllimit':"max"
+            'action':"query",
+            'titles':pagename,
+            'prop':"categories",
+            'clcategories':categoryname,
+            'clprop':"timestamp",
             'format':"json"
         }
         
+        try:
+            pageid = self.apiget(params_categoryage)['query']['pages']
+            for id, data in pageid.items():
+                timestamp = (data['categories'].pop())['timestamp']
+        except KeyError:
+                timestamp = "Page not in category."
+        return timestamp
+        
+    def ageincategorytest(self):
+        pagename = input("Page name: ")
+        categoryname = "Category:" + input("Category: ")
+        timestamp = self.ageincategory(pagename, categoryname)
+        print(timestamp)
+        return
+
     def isredirect(self, page):
         '''Check if the supplied page is a redirect.'''
         text = self.readpage(page)
